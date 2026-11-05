@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lerobot_robot_nero"
+version = "0.1.0"
+description = "LeRobot plugin: AgileX NERO follower arm via the agx_arm ROS 2 driver"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["lerobot_robot_nero"]

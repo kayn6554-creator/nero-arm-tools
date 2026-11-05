@@ -1,0 +1,146 @@
+{
+ "weigh": {
+  "id": 1,
+  "name": "称重",
+  "dataset": "nero_weigh_v1",
+  "task": "pick up the object and place it on the scale",
+  "steps": {
+   "1": "抓取物体",
+   "2": "移至秤上方",
+   "3": "放置于秤面",
+   "4": "撤离复位"
+  },
+  "item_slots": 11,
+  "per_item": 10,
+  "item_label": "物品",
+  "note": "把小物件放到银色电子秤上，手臂离开"
+ },
+ "task2": {
+  "id": 2,
+  "name": "水温测量",
+  "dataset": "nero_temp_v1",
+  "task": "pick up the thermometer and measure the water temperature in the container",
+  "steps": {
+   "1": "抓取温度计",
+   "2": "移至容器上方",
+   "3": "插入测温",
+   "4": "放回原位"
+  },
+  "item_slots": 6,
+  "per_item": 10,
+  "item_label": "容器",
+  "note": "抓起温度计，移到容器上方，插进水里测量，放回原处"
+ },
+ "task3": {
+  "id": 3,
+  "name": "风速测量",
+  "dataset": "nero_wind_v1",
+  "task": "pick up the anemometer and measure the wind speed",
+  "steps": {
+   "1": "抓取风速计",
+   "2": "接近测点",
+   "3": "测量风速",
+   "4": "放回原位"
+  },
+  "item_slots": 10,
+  "per_item": 10,
+  "item_label": "测点",
+  "note": "抓取风速计，移到测点前测量风速，放回原位"
+ },
+ "weigh_fail": {
+  "id": 4,
+  "name": "称重 · 失败",
+  "dataset": "nero_weigh_fail_v1",
+  "task": "pick up the object and place it on the scale",
+  "steps": {
+   "1": "抓取物体",
+   "2": "移至秤上方",
+   "3": "放置于秤面",
+   "4": "撤离复位"
+  },
+  "item_slots": 11,
+  "per_item": 10,
+  "item_label": "物品",
+  "note": "失败示范：step 照常按，到失败的那一步按 f 结束；停在 step k 就记为 Fk",
+  "items_from": "nero_weigh_v1",
+  "failure": {
+   "per_type": 20,
+   "types": {
+    "1": "抓取失败",
+    "2": "转移定位失败",
+    "3": "任务执行失败",
+    "4": "复位失败"
+   },
+   "definitions": {
+    "1": "未形成稳定抓持：未夹住、夹偏、提前合爪、提起后滑落",
+    "2": "抓持成功，但未能把目标送到作业位置上方：偏位、途中脱落、中途停滞",
+    "3": "到达作业位置，关键操作未完成：放到秤外、落在秤面边缘或悬空释放",
+    "4": "关键操作完成，但未能回到原位：折返、夹爪未松开、放偏"
+   }
+  }
+ },
+ "task2_fail": {
+  "id": 5,
+  "name": "水温测量 · 失败",
+  "dataset": "nero_temp_fail_v1",
+  "task": "pick up the thermometer and measure the water temperature in the container",
+  "steps": {
+   "1": "抓取温度计",
+   "2": "移至容器上方",
+   "3": "插入测温",
+   "4": "放回原位"
+  },
+  "item_slots": 6,
+  "per_item": 10,
+  "item_label": "容器",
+  "note": "失败示范：step 照常按，到失败的那一步按 f 结束；停在 step k 就记为 Fk",
+  "items_from": "nero_temp_v1",
+  "failure": {
+   "per_type": 20,
+   "types": {
+    "1": "抓取失败",
+    "2": "转移定位失败",
+    "3": "任务执行失败",
+    "4": "复位失败"
+   },
+   "definitions": {
+    "1": "未形成稳定抓持：未夹住、夹偏、提前合爪、提起后滑落",
+    "2": "抓持成功，但未能把目标送到作业位置上方：偏位、途中脱落、中途停滞",
+    "3": "到达作业位置，关键操作未完成：探针未入水，或卡在容器外壁",
+    "4": "关键操作完成，但未能回到原位：折返、夹爪未松开、放偏"
+   }
+  }
+ },
+ "task3_fail": {
+  "id": 6,
+  "name": "风速测量 · 失败",
+  "dataset": "nero_wind_fail_v1",
+  "task": "pick up the anemometer and measure the wind speed",
+  "steps": {
+   "1": "抓取风速计",
+   "2": "接近测点",
+   "3": "测量风速",
+   "4": "放回原位"
+  },
+  "item_slots": 10,
+  "per_item": 10,
+  "item_label": "测点",
+  "note": "失败示范：step 照常按，到失败的那一步按 f 结束；停在 step k 就记为 Fk",
+  "items_from": "nero_wind_v1",
+  "failure": {
+   "per_type": 20,
+   "types": {
+    "1": "抓取失败",
+    "2": "转移定位失败",
+    "3": "任务执行失败",
+    "4": "复位失败"
+   },
+   "definitions": {
+    "1": "未形成稳定抓持：未夹住、夹偏、提前合爪、提起后滑落",
+    "2": "抓持成功，但未能把目标送到作业位置上方：偏位、途中脱落、中途停滞",
+    "3": "到达作业位置，关键操作未完成：未对准测点，或与风扇干涉",
+    "4": "关键操作完成，但未能回到原位：折返、夹爪未松开、放偏"
+   }
+  }
+ }
+}

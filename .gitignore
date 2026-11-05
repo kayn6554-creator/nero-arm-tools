@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+*.bak*
+*.log
+*.tgz
+*.tar
+# 数据、运行记录不进仓库
+lerobot_data/
+vla_runs/
+vla_eval/

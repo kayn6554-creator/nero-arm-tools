@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lerobot_camera_ros"
+version = "0.1.0"
+description = "LeRobot plugin: camera that subscribes to a ROS 2 sensor_msgs/Image topic"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["lerobot_camera_ros"]

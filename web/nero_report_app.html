@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NERO 采集数据</title>
+<style>
+:root{color-scheme:light;
+  --bg:#f4f4f2;--surface:#fcfcfb;--sunk:#efeeeb;--line:#e2e1dc;--ink:#151513;--ink2:#52514e;--ink3:#86857f;
+  --acc:#2a78d6;--good:#0b8a0b;--bad:#d03b3b;--warn:#b77400;
+  --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#6250d6;--s8:#e34948;
+  --ph-reset:#eb6834;--ph-pos:#2a78d6;--ph-task:#1baf7a;--ph-none:#b9b8b2;--hold:rgba(27,175,122,.16);
+  --shadow:0 1px 2px rgba(20,20,15,.05),0 4px 16px rgba(20,20,15,.05)}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){color-scheme:dark;
+  --bg:#121211;--surface:#1a1a19;--sunk:#222220;--line:#30302d;--ink:#f0efec;--ink2:#c3c2b7;--ink3:#8d8c85;
+  --acc:#3987e5;--good:#33b833;--bad:#e66767;--warn:#e0a33a;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#2f9e2f;--s7:#9085e9;--s8:#e66767;
+  --ph-reset:#d95926;--ph-pos:#3987e5;--ph-task:#199e70;--ph-none:#55544f;--hold:rgba(25,158,112,.22);--shadow:none}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --bg:#121211;--surface:#1a1a19;--sunk:#222220;--line:#30302d;--ink:#f0efec;--ink2:#c3c2b7;--ink3:#8d8c85;
+  --acc:#3987e5;--good:#33b833;--bad:#e66767;--warn:#e0a33a;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#2f9e2f;--s7:#9085e9;--s8:#e66767;
+  --ph-reset:#d95926;--ph-pos:#3987e5;--ph-task:#199e70;--ph-none:#55544f;--hold:rgba(25,158,112,.22);--shadow:none}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
+button{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+.brand svg{width:20px;height:20px}
+.dss{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.ds{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px;font-size:13px;cursor:pointer;white-space:nowrap}
+.ds[aria-current="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ds small{color:var(--ink3);margin-left:4px} .ds[aria-current="true"] small{color:inherit;opacity:.7}
+.live{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink3)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 25%,transparent)}
+.live.off i{background:var(--ink3);box-shadow:none}
+.theme{border:1px solid var(--line);background:var(--surface);border-radius:8px;width:30px;height:30px;cursor:pointer}
+main{max-width:1180px;margin:0 auto;padding:22px 16px 80px;display:flex;flex-direction:column;gap:18px}
+.hero{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.hero h1{margin:0;font-size:28px;line-height:1.2;letter-spacing:-.01em}
+.hero .task{color:var(--ink2);margin-top:4px;max-width:70ch}
+.hero .path{color:var(--ink3);font-size:12.5px;word-break:break-all}
+.dl{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 11px;font-size:13px;color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--ink3);text-decoration:none}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+@media (max-width:820px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);min-width:0}
+.kpi b{display:block;font-size:26px;line-height:1.15;font-variant-numeric:tabular-nums;font-weight:650}
+.kpi span{color:var(--ink3);font-size:12.5px}
+.kpi .split{display:flex;gap:12px;align-items:baseline}
+.kpi .split em{font-style:normal;font-size:13px;color:var(--ink2);white-space:nowrap}
+.kpi .split{flex-wrap:wrap;column-gap:8px}
+@media (max-width:640px){.top .in{gap:8px}.dss{order:3;flex-basis:100%;overflow-x:auto;flex-wrap:nowrap}.live span{font-size:11.5px}main .eps{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}main .ep .bd{padding:7px 8px 9px}.hero h1{font-size:23px}}
+.ok-i{color:var(--good)} .bad-i{color:var(--bad)} .warn-i{color:var(--warn)}
+.grid2{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:980px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);min-width:0}
+.card h2{margin:0 0 12px;font-size:15px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.card h2 small{font-weight:400;color:var(--ink3);font-size:12.5px}
+.eps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.ep{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);cursor:pointer;text-align:left;padding:0;transition:border-color .15s,transform .15s}
+.ep:hover{border-color:var(--ink3);transform:translateY(-1px)}
+.ep:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.ep .th{aspect-ratio:4/3;background:var(--sunk);position:relative;display:grid;place-items:center;color:var(--ink3);font-size:12px}
+.ep .th img{width:100%;height:100%;object-fit:cover;display:block}
+.ep .no{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.62);color:#fff;border-radius:6px;padding:0 7px;font-size:12px;font-weight:600}
+.res{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.res.success{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
+.fprog{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start}
+.fprog .ft{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.fprog .ft.sug{border-color:var(--bad)}.fprog .last,.fprog>b{grid-column:1/-1}
+.res.failure{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.res.unlabeled{background:var(--sunk);color:var(--ink3)}
+.ep .th .res{position:absolute;right:8px;top:8px;background:var(--surface)}
+.ep .bd{padding:9px 11px 11px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--ink2)}
+.ep .row{display:flex;justify-content:space-between;gap:8px}
+.pbar{display:flex;height:7px;border-radius:4px;overflow:hidden;gap:2px;background:transparent}
+.pbar span{display:block;height:100%;border-radius:2px}
+.sbar{height:15px}.sbar span{color:#fff;font-size:10px;line-height:15px;text-align:center;overflow:hidden;white-space:nowrap}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:6px;padding:0 6px;font-size:11.5px;color:var(--ink2);white-space:nowrap}
+.chip.hold{border-color:color-mix(in srgb,var(--ph-task) 55%,var(--line));color:var(--ink)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:8px;border-radius:2px;display:inline-block}
+.checks{display:flex;flex-direction:column;gap:2px}
+.gh{font-size:12px;color:var(--ink3);margin:10px 0 4px;letter-spacing:.04em}
+.gh:first-child{margin-top:0}
+.ck{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}
+.ck:last-child{border-bottom:0}
+.ck .ic{font-weight:700;text-align:center}
+.ck .nm{font-weight:600;font-size:13.5px}
+.ck .nm small{font-weight:400;color:var(--ink3);margin-left:6px}
+.ck .ac{font-size:12.5px;color:var(--ink2);word-break:break-word}
+.ck .why{font-size:12px;color:var(--ink3)}
+.bars{display:flex;flex-direction:column;gap:6px}
+.br{display:grid;grid-template-columns:44px minmax(0,1fr) 52px;gap:8px;align-items:center;font-size:12.5px;cursor:pointer;border-radius:6px;padding:2px 4px}
+.br:hover{background:var(--sunk)}
+.br .lab{color:var(--ink2)} .br .v{text-align:right;color:var(--ink2)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--ink3);font-weight:500;font-size:12px}
+tbody tr{cursor:pointer} tbody tr:hover{background:var(--sunk)}
+details.card summary{cursor:pointer;font-weight:600;font-size:15px}
+details.card[open] summary{margin-bottom:10px}
+.qa p{margin:2px 0 10px;color:var(--ink2);font-size:13.5px}
+.qa b{font-size:13.5px}
+code,kbd{font-family:Consolas,Menlo,monospace;font-size:12px;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.empty{padding:40px 10px;text-align:center;color:var(--ink3)}
+/* 详情抽屉 */
+.scrim{position:fixed;inset:0;background:rgba(10,10,8,.38);z-index:20;display:none}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(860px,100%);background:var(--bg);z-index:21;transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;border-left:1px solid var(--line)}
+.open .scrim{display:block} .open .drawer{transform:none}
+.dh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+.dh h2{margin:0;font-size:18px;display:flex;align-items:center;gap:8px}
+.dh .sp{flex:1}
+.ib{border:1px solid var(--line);background:var(--surface);border-radius:8px;min-width:32px;height:32px;cursor:pointer;padding:0 8px}
+.ib:disabled{opacity:.35;cursor:default}
+.db{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.meta{color:var(--ink3);font-size:12.5px}
+.mk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:600px){.mk{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mk div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 11px}
+.mk b{display:block;font-size:19px;font-variant-numeric:tabular-nums}
+.mk span{font-size:12px;color:var(--ink3)}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.chart .ax{fill:var(--ink3);font-size:11px}
+.chart .xh{stroke:var(--ink3);stroke-width:1;stroke-dasharray:3 3}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;box-shadow:0 4px 18px rgba(0,0,0,.12);display:none;white-space:nowrap;z-index:2}
+.tip .r{display:flex;align-items:center;gap:6px} .tip i{width:10px;height:3px;border-radius:2px;display:inline-block}
+.tip b{font-variant-numeric:tabular-nums}
+.lgt{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.lgt button{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:1px 8px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;color:var(--ink2)}
+.lgt button i{width:12px;height:3px;border-radius:2px;display:inline-block}
+.lgt button[aria-pressed="false"]{opacity:.4}
+.segs{display:flex;flex-direction:column}
+.sg{display:grid;grid-template-columns:96px 74px minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.sg .t{color:var(--ink3);font-variant-numeric:tabular-nums} .sg .p{font-size:12px;color:var(--ink3)}
+.imgs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.imgs figure{margin:0} .imgs img{width:100%;border-radius:8px;display:block;background:var(--sunk)}
+.imgs figcaption{font-size:11.5px;color:var(--ink3);margin-top:2px}
+.islots{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.islot{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:5px;background:var(--surface);cursor:pointer;min-width:0}
+.islot.on{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 25%,transparent)}
+.islot .ih{display:flex;align-items:center;gap:6px;min-width:0}
+.islot .ino{font-weight:700;font-size:12px;background:var(--sunk);border-radius:5px;padding:0 6px}
+.islot .inm{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.islot input{flex:1;min-width:0;font:inherit;font-size:13px;padding:2px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.islot .icur{font-size:11px;color:var(--acc);font-weight:700}
+.ibar{height:5px;border-radius:3px;background:var(--sunk);overflow:hidden}.ibar span{display:block;height:100%;background:var(--acc)}
+.cbox{position:relative;margin-top:4px}.cbox pre{margin:0;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:12.5px/1.5 Consolas,Menlo,monospace;overflow-x:auto;white-space:pre}
+.cbtn{position:absolute;right:6px;top:6px;padding:1px 8px;font-size:12px}
+.gbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.gbar select,.gsel select{font:inherit;font-size:13px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.gchk{font-size:13px;display:inline-flex;gap:5px;align-items:center;color:var(--ink2)}
+.seg2{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}.seg2 button{border:0;background:var(--surface);padding:3px 10px;font-size:12.5px;cursor:pointer;color:var(--ink2)}
+.seg2 button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.gsel{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;background:var(--sunk);border-radius:8px;padding:6px 10px;margin-bottom:10px}.gsel[hidden]{display:none}
+.eps2{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.ep2{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);cursor:pointer;min-width:0;transition:border-color .12s}
+.ep2:hover{border-color:var(--ink3)}.ep2.sel{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 30%,transparent)}.ep2.isbad{border-color:color-mix(in srgb,var(--bad) 60%,var(--line))}
+.th2{aspect-ratio:4/3;background:var(--sunk);position:relative}.th2 img{width:100%;height:100%;object-fit:cover;display:block}
+.th2 .no{position:absolute;left:5px;top:5px;background:rgba(0,0,0,.62);color:#fff;border-radius:5px;padding:0 5px;font-size:11px;font-weight:600}
+.th2 .r{position:absolute;right:5px;top:5px;border-radius:50%;width:18px;height:18px;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--surface)}
+.th2 .r.success{color:var(--good)}.th2 .r.failure{color:var(--bad)}
+.th2 .gck{position:absolute;left:5px;bottom:5px;width:16px;height:16px;margin:0;cursor:pointer}
+.b2{padding:6px 8px 8px;display:flex;flex-direction:column;gap:4px;font-size:12px;min-width:0}.b2 b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbar.thin{height:8px}.sbar.thin span{font-size:0}
+.chip.bad{border-color:var(--bad);color:var(--bad);overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.glist img.mini{width:56px;height:42px;object-fit:cover;border-radius:4px;display:block}.glist tr.isbad td{background:color-mix(in srgb,var(--bad) 6%,transparent)}
+.pager{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:10px}.pager .btn:disabled{opacity:.4;cursor:default}
+.islot.over{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,var(--surface))}
+body.dragging .islot{border-style:dashed}
+.ibad{color:var(--bad);font-weight:600}
+.ctl{max-width:1240px;margin:14px auto 0;padding:0 16px}
+.ctl .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.ctl .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.ctl h2{margin:0;font-size:15px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ctl .mode{border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:700;color:#fff;background:var(--ink3)}
+.ctl .mode.rec{background:var(--good)}.ctl .mode.prep,.ctl .mode.reset{background:#b7791f}.ctl .mode.busy{background:var(--acc)}
+.kb{min-width:44px;font-weight:700}.kb.big{padding:8px 16px}.kb.ok{border-color:var(--good);color:var(--good)}.kb.no{border-color:var(--bad);color:var(--bad)}
+.kb.stepon{background:var(--ink);color:var(--bg)}
+.kb:disabled{opacity:.35;cursor:default}
+.ctl .prog{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--sunk);font-size:13.5px}
+.ctl .prog .big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.ctl .pbar2{width:140px;height:8px;border-radius:99px;background:var(--line);overflow:hidden}.ctl .pbar2 span{display:block;height:100%;background:var(--good)}
+.ctl .last.ok{color:var(--good);font-weight:600}.ctl .last.bad{color:var(--bad);font-weight:600}
+.ctl .msg{font-size:13px;min-height:18px;margin-top:8px}.ctl .msg.err{color:var(--bad)}
+.ctl pre.term{background:#0d1117;color:#d6e2ee;border-radius:8px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;max-height:260px;overflow:auto;white-space:pre-wrap;margin:8px 0 0}
+.ctl details summary{cursor:pointer;font-size:13px;color:var(--ink2);margin-top:10px}
+.ctl select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.grid2.wide{grid-template-columns:1fr}
+.badp{border-left:4px solid var(--bad)}.badp h2{color:var(--bad)}
+.bg{padding:8px 0;border-top:1px dashed var(--line)}.bg:first-of-type{border-top:0}
+.bh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.bh .cnt{font-size:12px;border-radius:999px;padding:0 8px;background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);font-weight:700}
+.bl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.bep{display:inline-flex;gap:5px;align-items:baseline;border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;background:var(--surface)}
+.bep:hover{border-color:var(--bad)}.bep small{font-weight:400;color:var(--ink2);font-size:11.5px}
+.pend{border-left:4px solid var(--line)}.pend.has{border-left-color:#b7791f;background:color-mix(in srgb,#b7791f 6%,var(--surface))}
+.pend .ph{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}.pend .ph b{margin-right:8px}
+.pend pre.term,.ctl pre.term{background:#0d1117;color:#d6e2ee;border-radius:8px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;max-height:260px;overflow:auto;white-space:pre-wrap;margin:8px 0 0}
+.pend .msg{font-size:13px}.pend .msg.err{color:var(--bad)}
+.ckall summary{cursor:pointer;font-size:13px;color:var(--ink2);padding:8px 0}
+.note{font-size:12.5px;color:var(--ink2);background:var(--sunk);border-radius:8px;padding:8px 10px}
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M7 20v-5l4-4 3 3 4-6"/><circle cx="18" cy="8" r="1.6"/></svg>NERO 采集数据</div>
+  <nav class="dss" id="dss" aria-label="数据集"></nav>
+  <div class="live" id="live"><i></i><span>连接中…</span></div>
+  <button class="theme" id="theme" title="切换明暗" aria-label="切换明暗">◐</button>
+</div></header>
+<section id="ctl" class="ctl" hidden></section>
+<main id="main"><div class="empty">正在读取数据…</div></main>
+<div id="dw"><div class="scrim" id="scrim"></div><aside class="drawer" id="drawer" aria-label="单条详情"></aside></div>
+<script>
+const PH = {"复位":"--ph-reset","定位移动":"--ph-pos","任务遥操作":"--ph-task","未记录":"--ph-none"};
+const RES = {success:["✓","成功"],failure:["✗","失败"],unlabeled:["?","未标注"]};
+const JN = ["j1 底座转","j2 大臂","j3 大臂转","j4 小臂","j5 小臂转","j6 腕摆","j7 腕转"];
+const SER = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7"];
+const STC = {1:"--s1",2:"--s4",3:"--s7",4:"--s5"};
+const sbar = st => st && st.length ? `<div class="pbar sbar" title="${esc(st.map(x => `${x.step} ${x.name} ${x.t0}–${x.t1}s`).join("，"))}">` + st.map(x => `<span style="flex:${Math.max(x.t1 - x.t0, 0.01)};background:var(${STC[x.step] || "--ph-none"})">${x.t1 - x.t0 > 0 ? esc(x.name) : ""}</span>`).join("") + `</div>` : "";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cv = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let GAL = { item: "all", bad: false, view: "tile", page: 0, sel: new Set(), sort: "new" }; try { GAL.view = localStorage.getItem("nero-view") || "tile"; } catch (e) {}
+let TASKS = {}, DS = [], cur = null, S = null, lastGen = {}, openEp = null, EPC = {}, EDIT_ITEMS = false;
+const SINGLE = window.NERO_SINGLE || null;   // 打包给别人看时：report/index.html 只看这一个数据集，只读
+const RB = n => SINGLE ? "" : `${encodeURIComponent(n)}/report/`;
+
+try { const t = localStorage.getItem("nero-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+$("#theme").onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("nero-theme", document.documentElement.dataset.theme); } catch (e) {}
+  render(); if (openEp != null) showEp(openEp, true);
+};
+
+const getJSON = async u => { const r = await fetch(u + (u.includes("?") ? "&" : "?") + "t=" + Date.now()); if (!r.ok) throw new Error(r.status); return r.json(); };
+const res = r => `<span class="res ${r}">${RES[r][0]} ${RES[r][1]}</span>`;
+const pbar = (ph, L) => `<div class="pbar" title="${esc(ph.map(p => `${p.name} ${p.t0}–${p.t1}s`).join("，"))}">` +
+  ph.map(p => `<span style="flex:${Math.max(p.t1 - p.t0, 0.01)};background:var(${PH[p.name] || "--ph-none"})"></span>`).join("") + `</div>`;
+const legendPh = () => `<div class="legend">${["复位","定位移动","任务遥操作"].map(k => `<span><i style="background:var(${PH[k]})"></i>${k}</span>`).join("")}</div>`;
+const ago = g => { if (!g) return ""; const s = (Date.now() - new Date(g.replace(" ", "T"))) / 1000; return s < 90 ? "刚刚" : s < 3600 ? `${Math.round(s/60)} 分钟前` : s < 86400 ? `${Math.round(s/3600)} 小时前` : g.slice(0, 16); };
+
+async function poll(first) {
+  try {
+    const d = SINGLE ? await getJSON("summary.json").then(x => ({ datasets: [{ name: SINGLE, generated: x.generated, episodes: x.episodes }] })) : await getJSON("datasets.json"); DS = d.datasets || []; TASKS = d.tasks || TASKS;
+    const want = decodeURIComponent(location.hash.slice(1)).split("/")[0];
+    if (!cur || !DS.find(x => x.name === cur)) cur = DS.find(x => x.name === want)?.name || DS[0]?.name;
+    const it = DS.find(x => x.name === cur);
+    const key = `${it?.generated}|${it?.labels_mtime}`;
+    if (it && (first || lastGen[cur] !== key || !S || S.name !== cur)) {
+      if (it.empty) {
+        const lab = await getJSON(`_labels/${encodeURIComponent(cur)}.json`).catch(() => ({ items: {}, current: 0, per_item: 10 }));
+        const tk = Object.values(d.tasks || {}).find(t => t.dataset === cur) || {};
+        S = { name: cur, dataset: "/data/panhe/lerobot_data/" + cur, task: tk.task || "", fps: "—", generated: "", step_names: Object.keys(tk.steps || {}).length ? tk.steps : undefined,
+              items: [], checks: [], episodes: 0, success: 0, failure: 0, unlabeled: 0, total_minutes: 0, check_ok: 0, check_total: 0, empty: true,
+              labels: { ...lab, progress: {}, has_item_field: true, item_label: tk.item_label || "物品" },
+              fail: tk.failure ? { per_type: tk.failure.per_type || 20, types: tk.failure.types || {}, definitions: tk.failure.definitions || {}, count: {}, good: {} } : undefined };
+      } else S = await getJSON(`${RB(cur)}summary.json`);
+      lastGen[cur] = key; EPC = {}; if (!EDIT_ITEMS) render();
+      if (openEp != null) showEp(openEp, true);
+    }
+    navDs(); const l = $("#live"); l.className = "live"; l.querySelector("span").textContent = `实时 · ${S && S.generated ? S.generated.slice(5, 16) + " 更新" : "等第一条"}${it?.live ? " · 正在录制" : ""}`;
+  } catch (e) { const l = $("#live"); l.className = "live off"; l.querySelector("span").textContent = "连不上服务（检查 8766 转发）"; }
+}
+function navDs() {
+  $("#dss").innerHTML = DS.map(x => `<button class="ds" aria-current="${x.name === cur}" data-n="${esc(x.name)}">${x.live ? "● " : ""}${esc(x.name)}<small>${x.episodes ?? 0}</small></button>`).join("");
+  document.querySelectorAll(".ds").forEach(b => b.onclick = () => { cur = b.dataset.n; openEp = null; closeEp(); location.hash = cur; S = null; poll(true); });
+}
+
+function render() {
+  if (!S) { $("#main").innerHTML = `<div class="empty">还没有任何数据集的报告。录完第一条（按 → 或 Esc 保存）后会自动出现。</div>`; return; }
+  const it = S.items || [], n = it.length, lab = S.success + S.failure;
+  const A = S.checks.filter(c => c.group === "A"), B = S.checks.filter(c => c.group === "B");
+  const mx = Math.max(1, ...it.map(e => e.length_s));
+  const ck = c => { const ic = c.status === "ok" ? ["✓","ok-i","满足"] : c.status === "warn" ? ["!","warn-i","注意"] : ["✗","bad-i","不满足"];
+    return `<div class="ck"><div class="ic ${ic[1]}" title="${ic[2]}">${ic[0]}</div><div><div class="nm">${esc(c.item)}<small>${esc(c.require)}</small></div><div class="ac">${esc(c.actual)}</div>${c.why ? `<div class="why">${esc(c.why)}</div>` : ""}</div></div>`; };
+  const okA = A.filter(c => c.status === "ok").length;
+  $("#main").innerHTML = `
+  <section class="hero"><div><h1>${esc(S.name)}</h1><div class="task">任务：${esc(S.task || "—")}</div><div class="path">${esc(S.dataset)} · ${S.fps} Hz · 最后保存 ${esc(S.generated)}</div></div>
+    ${S.empty ? "" : `<div class="dl"><a class="btn" href="${RB(S.name)}episodes.csv" download>⇣ 明细 CSV</a><a class="btn" href="${RB(S.name)}summary.json" target="_blank">{ } summary.json</a>${SINGLE ? "" : `<a class="btn" href="${encodeURIComponent(S.name)}/" target="_blank">▤ 原始文件</a>`}</div>`}</section>
+  <section class="kpis">
+    <div class="kpi"><b>${n}</b><span>条数据 · ${S.total_minutes} 分钟</span></div>
+    <div class="kpi"><div class="split"><b class="ok-i">${S.success}</b><em>✓ 成功</em><b class="bad-i">${S.failure}</b><em>✗ 失败</em></div><span>${S.unlabeled ? `未标注 ${S.unlabeled} 条` : "全部已标注"}</span></div>
+    ${S.fail ? `<div class="kpi"><b>${Object.values(S.fail.good).reduce((a, x) => a + Math.min(x, S.fail.per_type), 0)}<small style="font-size:14px;font-weight:400"> / ${Object.keys(S.fail.types).length * S.fail.per_type}</small></b><span>失败类型合格条数</span></div>` : `<div class="kpi"><b>${lab ? Math.round(S.success / lab * 100) : 0}%</b><span>成功率（已标注）</span></div>`}
+    <div class="kpi"><b>${n ? (it.reduce((a, e) => a + e.length_s, 0) / n).toFixed(1) : 0}<small style="font-size:14px;font-weight:400"> s</small></b><span>平均每条</span></div>
+    <div class="kpi"><b class="${okA === A.length ? "ok-i" : "bad-i"}">${okA}/${A.length}</b><span>学长数据标准满足项</span></div>
+  </section>
+  ${pendingPanel()}
+  ${failPanel()}
+  ${itemsPanel()}
+  ${badPanel()}
+  <section class="grid2">
+    <div class="card" id="gal">${galleryCard()}</div>
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">${checksCard(A, B, ck)}</div>
+  </section>
+  <details class="card qa"><summary>说明与常见问题</summary>
+    <b>大阶段</b><p>录制时每帧记下定位模式开/关：第一次开定位前 = 复位；定位开着 = 定位移动；最后一次关定位后 = 任务遥操作。离线补的数据没有阶段信息（灰色）。</p>
+    <b>夹住怎么判断</b><p>从臂夹爪自己不报“夹紧”。报告比较主臂指令宽度和从臂实际宽度：指令比实际更合拢 8 mm 以上、持续 1 s 以上，就是被物体挡住了，即夹住。</p>
+    <b>step</b><p>录制时按数字键：${Object.entries(S.step_names || {1: "抓", 2: "移动", 3: "放置", 4: "离开"}).map(([k, v]) => k + " " + v).join("、")}。每条开始自动是 1；按错了直接按对的数字。每帧存在 step_index 里。</p>
+    <b>动作分段</b><p>关节速度 &gt; 3°/s 为移动；夹爪 1.5 s 内变化 &gt; 10 mm 为闭合或张开。</p>
+    <b>页面不刷新</b><p>窗口 5 要运行 <code>~/nero_report_serve.sh</code>，Windows 要开着 <code>ssh -N -L 8766:127.0.0.1:8766 panhe@192.168.1.102</code>。每条在复位结束（按 → 或 Esc）时才保存。</p>
+    <b>重算统计</b><p><code>source ~/env_evo.sh; python ~/nero_report.py /data/panhe/lerobot_data/数据集名</code>，录制时的截图和大阶段会保留。</p>
+  </details>`;
+  document.querySelectorAll("#main .br[data-ep], #tblsec [data-ep]").forEach(el => el.onclick = () => showEp(+el.dataset.ep));
+  wireItems(); wireGallery(); relabel($("#main"));
+  if (S.empty) { $("#main .grid2").style.display = "none"; }
+  wireExport();
+}
+
+function codeBox(t) { return `<div class="cbox"><button class="btn cbtn" type="button" data-copy="${esc(t)}">复制</button><pre>${esc(t)}</pre></div>`; }
+/* ---------- 数据标准：只展开没通过的 ---------- */
+function checksCard(A, B, ck) {
+  const all = [...A, ...B], bad = all.filter(c => c.status !== "ok"), okA = A.filter(c => c.status === "ok").length, okB = B.filter(c => c.status === "ok").length;
+  return `<div class="card"><h2>数据标准检查 <small>A 学长标准 ${okA}/${A.length} · B 训练兼容 ${okB}/${B.length}</small></h2><div class="checks">
+    ${bad.length ? bad.map(ck).join("") : `<div class="ck"><div class="ic ok-i">✓</div><div><div class="nm">全部 ${all.length} 项都满足</div></div></div>`}
+    <details class="ckall"><summary>${bad.length ? `另外 ${all.length - bad.length} 项已满足，点开看全部` : "点开看每一项"}</summary>
+      <div class="gh">A · 学长数据标准</div>${A.map(ck).join("")}<div class="gh">B · Evo-RL 训练兼容</div>${B.map(ck).join("")}</details></div></div>`;
+}
+
+/* ---------- 还没写入数据集的修改 + 一键处理并导出 ---------- */
+let EXP = {};
+function pendingPanel() {
+  if (SINGLE || S.empty) return "";
+  const nStep = (S.pending_edits || []).length, nItem = (S.items || []).filter(e => e.item_pending).length, j = EXP[cur];
+  const pend = nStep + nItem;
+  return `<section class="card pend ${pend ? "has" : ""}"><div class="ph"><div>
+      ${pend ? `<b>有 ${pend} 条修改还没写入数据集</b><span class="meta">（${[nStep ? `step ${nStep} 条` : "", nItem ? `${IL()} ${nItem} 条` : ""].filter(Boolean).join("、")}；网页上的修改先存在报告里，导出前要写进数据集）</span>`
+             : `<b>没有待写入的修改</b><span class="meta">数据集和网页上看到的一致</span>`}</div>
+    <button class="btn kb big ${j?.status === "running" ? "" : "ok"}" id="expbtn" ${j?.status === "running" ? "disabled" : ""}>${j?.status === "running" ? `处理中：${esc(j.stage)}…` : "⇪ 处理并导出"}</button></div>
+    <div class="meta" style="margin-top:6px">按顺序做：写入修改 → 逐条核对（nero_verify）→ 打包成 ~/${esc(cur)}.tgz；核对没全部通过就停下、不打包。录制程序在跑时不能用。</div>
+    ${j ? `<div class="msg ${j.status === "failed" ? "err" : ""}" style="margin-top:8px">${j.status === "done" ? "✓ " : j.status === "failed" ? "✗ " : ""}${esc(j.message || "")}</div>
+      ${j.status === "done" ? codeBox(`scp panhe@192.168.1.102:~/${cur}.tgz %USERPROFILE%\\Downloads\\`) : ""}
+      <details ${j.status !== "done" ? "open" : ""}><summary class="meta">日志（${j.log.length} 行 · ${esc(j.started)}${j.ended ? "–" + esc(j.ended) : ""}）</summary><pre class="term">${esc(j.log.slice(-80).join("\n"))}</pre></details>` : ""}
+  </section>`;
+}
+async function expPoll(name) {
+  try { const r = await getJSON(`api/export_state?dataset=${encodeURIComponent(name)}`); if (r.job) EXP[name] = r.job; } catch (e) {}
+  if (name === cur && !EDIT_ITEMS) { const el = $("#main .pend"); if (el) { el.outerHTML = pendingPanel(); wireExport(); } }
+  if (EXP[name]?.status === "running") setTimeout(() => expPoll(name), 1000);
+  else if (EXP[name]?.status === "done") poll(true);
+}
+function wireExport() {
+  const b = $("#expbtn"); if (!b) return;
+  b.onclick = async () => {
+    if (!confirm(`处理并导出 ${cur}？\n会把网页上的修改写进数据集（原文件自动备份），再逐条核对、打包。`)) return;
+    const r = await fetch("api/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataset: cur }) }).then(x => x.json()).catch(e => ({ ok: false, error: e.message }));
+    if (!r.ok) { alert(r.error); return; }
+    expPoll(cur);
+  };
+  if (!EXP[cur]) getJSON(`api/export_state?dataset=${encodeURIComponent(cur)}`).then(r => { if (r.job) { EXP[cur] = r.job; if (r.job.status === "running") expPoll(cur); else { const el = $("#main .pend"); if (el) { el.outerHTML = pendingPanel(); wireExport(); } } } }).catch(() => {});
+}
+
+/* ---------- 每条数据：缩略图 / 列表、筛选、分页、多选、拖到物品 ---------- */
+const PAGE = 30;
+function galList() {
+  let L = (S.items || []).slice().reverse();
+  if (GAL.item !== "all") L = L.filter(e => String(e.item || 0) === GAL.item);
+  if (GAL.bad) L = L.filter(e => (e.issues || []).length);
+  const by = { new: (a, b) => b.episode - a.episode, old: (a, b) => a.episode - b.episode, long: (a, b) => b.length_s - a.length_s, short: (a, b) => a.length_s - b.length_s,
+               bad: (a, b) => (b.issues || []).length - (a.issues || []).length || b.episode - a.episode, item: (a, b) => (a.item || 99) - (b.item || 99) || a.episode - b.episode }[GAL.sort];
+  return by ? L.slice().sort(by) : L;
+}
+function issueChip(e) { const n = (e.issues || []).length; return n ? `<span class="chip bad" title="${esc(e.issues.join("；"))}">⚠ ${n === 1 ? esc(e.issues[0]) : n + " 个问题"}</span>` : ""; }
+function galleryCard() {
+  const all = S.items || []; if (!all.length) return `<h2>每条数据</h2><div class="empty">还没有数据。每条在复位结束（按 → 或 Esc）时保存，保存后 5 秒内出现在这里。</div>`;
+  const L = galList(), pages = Math.max(1, Math.ceil(L.length / PAGE)); GAL.page = Math.min(GAL.page, pages - 1);
+  const view = L.slice(GAL.page * PAGE, GAL.page * PAGE + PAGE), hasItem = S.labels?.has_item_field, items = S.labels?.items || {};
+  const nbad = all.filter(e => (e.issues || []).length).length;
+  const tb = `<div class="gbar">
+    ${hasItem ? `<select id="gitem"><option value="all">全部物品（${all.length}）</option>${Object.entries(items).map(([k, v]) => `<option value="${k}" ${GAL.item === k ? "selected" : ""}>${k} · ${esc(v || "物品 " + k)}（${all.filter(e => String(e.item) === k).length}）</option>`).join("")}<option value="0" ${GAL.item === "0" ? "selected" : ""}>未标（${all.filter(e => !e.item).length}）</option></select>` : ""}
+    <label class="gchk"><input type="checkbox" id="gbad" ${GAL.bad ? "checked" : ""}> 只看有问题（${nbad}）</label>
+    <select id="gsort" title="排序">${[["new", "新的在前"], ["old", "旧的在前"], ["long", "时长长的在前"], ["short", "时长短的在前"], ["bad", "有问题的在前"], ["item", "按物品"]].map(([k, v]) => `<option value="${k}" ${GAL.sort === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+    <span style="flex:1"></span>
+    <div class="seg2"><button data-v="tile" aria-pressed="${GAL.view === "tile"}">缩略图</button><button data-v="list" aria-pressed="${GAL.view === "list"}">列表</button></div></div>
+    ${hasItem && !SINGLE ? `<div class="gsel" ${GAL.sel.size ? "" : "hidden"}>已选 <b>${GAL.sel.size}</b> 条 → 移到 <select id="gmove">${Object.entries(items).map(([k, v]) => `<option value="${k}">${k} · ${esc(v || "物品 " + k)}</option>`).join("")}</select> <button class="btn" id="gmovebtn">移动</button> <button class="btn" id="gclear">取消选择</button></div>` : ""}`;
+  const ck = e => hasItem && !SINGLE ? `<input type="checkbox" class="gck" data-sel="${e.episode}" ${GAL.sel.has(e.episode) ? "checked" : ""} title="选中（可多选后一起移到别的物品）">` : "";
+  const tile = e => `<div class="ep2${GAL.sel.has(e.episode) ? " sel" : ""}${(e.issues || []).length ? " isbad" : ""}" data-ep="${e.episode}" draggable="${hasItem && !SINGLE}" title="第 ${e.episode} 条${hasItem ? " · " + esc(e.item_name || "") : ""}${(e.issues || []).length ? " · " + esc(e.issues.join("；")) : ""}">
+      <div class="th2">${e.thumb ? `<img loading="lazy" src="${RB(S.name)}${e.thumb}" alt="">` : ""}<span class="no">#${e.episode}</span><span class="r ${e.result}">${RES[e.result][0]}${e.fail_type ? " F" + e.fail_type : ""}</span>${ck(e)}</div>
+      <div class="b2">${hasItem ? `<b>${esc(e.item_name || "未标")}${e.item_pending ? " *" : ""}</b>` : ""}<span class="meta">${e.length_s} s · ${esc(e.recorded.slice(11, 16))}</span>${sbar(e.steps).replace('class="pbar sbar"', 'class="pbar sbar thin"')}${issueChip(e)}</div></div>`;
+  const row = e => `<tr class="${(e.issues || []).length ? "isbad" : ""}" data-ep="${e.episode}" draggable="${hasItem && !SINGLE}"><td>${ck(e)}</td><td>${e.episode}</td><td>${e.thumb ? `<img class="mini" loading="lazy" src="${RB(S.name)}${e.thumb}" alt="">` : ""}</td>
+      ${hasItem ? `<td><b>${esc(e.item_name || "未标")}</b>${e.item_pending ? " *" : ""}</td>` : ""}<td>${res(e.result)}</td><td class="num">${e.length_s}</td><td class="num">${e.frames}</td><td style="min-width:150px">${sbar(e.steps) || "—"}</td><td style="min-width:90px">${pbar(e.phases || [], e.length_s)}</td><td>${issueChip(e) || '<span class="meta">—</span>'}</td><td class="meta">${esc(e.motion_summary || "")}</td><td class="num">${e.gripper_range_mm ?? ""}</td><td class="num">${e.action_state_diff_deg ?? ""}</td><td class="meta">${esc(e.recorded.slice(5, 16))}</td></tr>`;
+  const body = !view.length ? `<div class="empty">没有符合条件的条目</div>` : GAL.view === "list"
+    ? `<div class="tw"><table class="glist"><thead><tr><th></th><th>#</th><th></th>${hasItem ? "<th>物品</th>" : ""}<th>结果</th><th>时长 s</th><th>帧</th><th>step</th><th>大阶段</th><th>问题</th><th>动作</th><th>夹爪行程 mm</th><th>动作−状态差 °</th><th>录制</th></tr></thead><tbody>${view.map(row).join("")}</tbody></table></div>`
+    : `<div class="eps2">${view.map(tile).join("")}</div>`;
+  const pager = pages > 1 ? `<div class="pager"><button class="btn" id="gprev" ${GAL.page ? "" : "disabled"}>‹ 上一页</button><span class="meta">第 ${GAL.page + 1} / ${pages} 页 · 共 ${L.length} 条</span><button class="btn" id="gnext" ${GAL.page < pages - 1 ? "" : "disabled"}>下一页 ›</button></div>` : "";
+  return `<h2>每条数据 <small>${hasItem && !SINGLE ? "点开看详情；勾选或直接拖到上面的物品格子，可以改成别的物品；完整明细在“列表”里，也可以下载 CSV" : "点开看详情；完整明细在“列表”里"}</small></h2>${tb}${body}${pager}`;
+}
+function wireGallery() {
+  const g = $("#gal"); if (!g) return;
+  g.closest(".grid2")?.classList.toggle("wide", GAL.view === "list");   // 列表视图占满整行
+  const redraw = () => { g.innerHTML = galleryCard(); wireGallery(); };
+  g.querySelectorAll("[data-ep]").forEach(el => el.onclick = ev => { if (ev.target.classList.contains("gck")) return; showEp(+el.dataset.ep); });
+  g.querySelectorAll(".gck").forEach(c => c.onclick = ev => { ev.stopPropagation(); const k = +c.dataset.sel; c.checked ? GAL.sel.add(k) : GAL.sel.delete(k); redraw(); });
+  if ($("#gitem")) $("#gitem").onchange = ev => { GAL.item = ev.target.value; GAL.page = 0; redraw(); };
+  if ($("#gbad")) $("#gbad").onchange = ev => { GAL.bad = ev.target.checked; GAL.page = 0; redraw(); };
+  if ($("#gsort")) $("#gsort").onchange = ev => { GAL.sort = ev.target.value; GAL.page = 0; redraw(); };
+  g.querySelectorAll(".seg2 button").forEach(b => b.onclick = () => { GAL.view = b.dataset.v; try { localStorage.setItem("nero-view", GAL.view); } catch (e) {} redraw(); });
+  if ($("#gprev")) $("#gprev").onclick = () => { GAL.page--; redraw(); };
+  if ($("#gnext")) $("#gnext").onclick = () => { GAL.page++; redraw(); };
+  if ($("#gclear")) $("#gclear").onclick = () => { GAL.sel.clear(); redraw(); };
+  if ($("#gmovebtn")) $("#gmovebtn").onclick = () => moveTo([...GAL.sel], +$("#gmove").value);
+  g.querySelectorAll('[draggable="true"]').forEach(el => el.ondragstart = ev => {
+    const k = +el.dataset.ep, eps = GAL.sel.has(k) ? [...GAL.sel] : [k];
+    ev.dataTransfer.setData("text/plain", JSON.stringify(eps)); ev.dataTransfer.effectAllowed = "move";
+    document.body.classList.add("dragging"); });
+  g.querySelectorAll('[draggable="true"]').forEach(el => el.ondragend = () => document.body.classList.remove("dragging"));
+}
+async function moveTo(eps, item) {
+  if (!eps.length) return;
+  const name = S.labels.items[String(item)] || `物品 ${item}`;
+  if (!confirm(`把第 ${eps.sort((a, b) => a - b).join("、")} 条改成「${item} · ${name}」？\n（先存在报告里，之后用 nero_steps_apply.py 写进数据集）`)) return;
+  const r = await postLabels({ episodes_map: Object.fromEntries(eps.map(e => [e, item])) });
+  if (r.ok) GAL.sel.clear(); else alert("保存失败：" + r.error);
+}
+
+function badPanel() {
+  if (SINGLE || !S.items) return "";
+  const bad = S.items.filter(e => (e.issues || []).length);
+  if (!bad.length) return "";
+  const T = [
+    { k: "step", t: "step 不完整或顺序不对", fix: "点开那一条 → step 分段 → ✎ 调整分界，补上漏按的 step", m: x => x.startsWith("step") },
+    { k: "sync", t: "两相机时间差 > 20 ms", fix: "删掉重录（先按 Esc 结束录制）", m: x => x.startsWith("两相机"), del: 1 },
+    { k: "depth", t: "头部深度−彩色时间差 > 20 ms", fix: "删掉重录（先按 Esc 结束录制）", m: x => x.startsWith("头部深度"), del: 1 },
+    { k: "item", t: `没标${IL()}`, fix: `把这几条拖到正确的${IL()}格子（可以勾选多条一起拖）`, m: x => x.startsWith("没标") },
+    { k: "other", t: "其他", fix: "点开看详情", m: () => true }];
+  const G = T.map(g => ({ ...g, eps: [] }));
+  for (const e of bad) for (const x of e.issues) { const g = G.find(g => g.m(x)); if (!g.eps.find(y => y.e === e)) g.eps.push({ e, x }); }
+  const delAll = [...new Set(G.filter(g => g.del).flatMap(g => g.eps.map(y => y.e.episode)))].sort((a, b) => a - b);
+  return `<section class="card badp"><h2>✗ ${bad.length} 条需要处理 <small>按问题分组；点编号打开那一条</small></h2>
+    ${G.filter(g => g.eps.length).map(g => `<div class="bg"><div class="bh"><b>${g.t}</b><span class="cnt">${g.eps.length} 条</span><span class="meta">${g.fix}</span></div>
+      <div class="bl">${g.eps.map(({ e, x }) => `<a href="#" class="bep" data-open="${e.episode}" title="${esc(x)}${e.item_name ? " · " + esc(e.item_name) : ""}">#${e.episode}${g.k === "step" ? `<small>${esc(x.replace(/^step\s*/, ""))}</small>` : g.k === "sync" || g.k === "depth" ? `<small>${esc((x.match(/[\d.]+ ms/) || [""])[0])}</small>` : ""}</a>`).join("")}</div></div>`).join("")}
+    ${delAll.length ? `<div class="meta" style="margin-top:6px">一次删掉所有时间差超标的 ${delAll.length} 条（后面的条会往前补号；先按 Esc 结束录制）：</div>${codeBox(`source ~/env_evo.sh\npython ~/nero_delete.py /data/panhe/lerobot_data/${cur} ${delAll.join(" ")}`)}` : ""}</section>`;
+}
+function badSync(e) {
+  const r = []; if (e.sync && e.sync.max_ms > 20) r.push(`两相机时间差最大 ${e.sync.max_ms} ms`);
+  if (e.depth_sync && e.depth_sync.max_ms > 20) r.push(`头部深度−RGB 最大 ${e.depth_sync.max_ms} ms`); return r.join("，");
+}
+document.addEventListener("click", ev => { const b = ev.target.closest("[data-copy]"); if (!b) return;
+  const t = b.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = "已复制"; setTimeout(() => b.textContent = "复制", 1200); })
+    .catch(() => { const a = document.createElement("textarea"); a.value = t; document.body.appendChild(a); a.select(); document.execCommand("copy"); a.remove(); b.textContent = "已复制"; }); });
+
+/* ---------- 物品标签 ---------- */
+async function postLabels(body) {
+  try { const r = await fetch("api/labels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataset: cur, ...body }) });
+    const j = await r.json(); if (j.ok) { lastGen = {}; await poll(true); } return j; } catch (e) { return { ok: false, error: "报告服务是只读的旧版？" }; }
+}
+function failPanel() {
+  const F = S.fail; if (!F) return "";
+  const ks = Object.keys(F.types), done = ks.reduce((a, k) => a + Math.min(F.good[k] || 0, F.per_type), 0);
+  return `<section class="card"><h2>失败类型 <small>${ks.length} 种 × 每种 ${F.per_type} 条 · 合格 ${done} / ${ks.length * F.per_type} · 停在 step k 按 f 就是 Fk，自动归类</small></h2>
+    <div class="islots">${ks.map(k => { const g = F.good[k] || 0, c = F.count[k] || 0;
+      return `<div class="islot"><div class="ih"><span class="ino">F${k}</span><span class="inm">${esc(F.types[k])}</span></div>
+        <div class="ibar"><span style="width:${Math.min(100, g / F.per_type * 100)}%"></span></div><div class="meta">${g} / ${F.per_type} 条${c > g ? ` · ⚠ ${c - g} 条有问题` : ""}</div>
+        <div class="meta" style="margin-top:4px">${esc((F.definitions || {})[k] || "")}</div></div>`; }).join("")}</div></section>`;
+}
+function itemsPanel() {
+  const L = S.labels; if (!L || !L.has_item_field || !L.items) return "";
+  const ks = Object.keys(L.items), prog = L.progress || {}, FA = !!S.fail, per = FA ? Math.max(1, ...ks.map(k => prog[k] || 0)) : (L.per_item || 10);
+  const total = ks.reduce((a, k) => a + Math.min(prog[k] || 0, per), 0);
+  const slot = k => { const c = prog[k] || 0, nm = L.items[k], on = String(L.current) === k, bad = (L.issues || {})[k] || [];
+    return `<div class="islot${on ? " on" : ""}" data-drop="${k}" ${SINGLE || EDIT_ITEMS ? "" : `data-cur="${k}" title="点击：设为当前采集的物品；也可以把下面的数据拖到这里"`}>
+      <div class="ih"><span class="ino">${k}</span>${EDIT_ITEMS ? `<input data-k="${k}" value="${esc(nm)}" placeholder="物品 ${k} 的名字" maxlength="40">` : `<span class="inm">${esc(nm || "未命名")}</span>`}${on ? `<span class="icur">当前</span>` : ""}</div>
+      <div class="ibar"><span style="width:${Math.min(100, c / per * 100)}%"></span></div><div class="meta">${FA ? `${c} 条` : `${c} / ${per} 条`}${bad.length ? ` · <a href="#" class="ibad" data-bad="${k}" title="第 ${bad.join("、")} 条">⚠ ${bad.length} 条有问题</a>` : ""}</div></div>`; };
+  return `<section class="card"><h2>物品 <small>${FA ? `${ks.length} 个 · 失败数据只记录用了哪个，不要求条数` : `${ks.length} 个 × 每个 ${per} 条 · 已完成 ${total} / ${ks.length * per}`}${SINGLE ? "" : " · 点一个物品设为“当前”，之后录的每一条都会带上它"}</small>
+      <span style="flex:1"></span>${SINGLE ? "" : EDIT_ITEMS ? `<button class="btn" id="iadd">＋ 加一个</button><button class="btn" id="isave" style="background:var(--ink);color:var(--bg);border-color:var(--ink)">保存名字</button><button class="btn" id="icancel">取消</button>` : `<button class="btn" id="iedit">✎ 填写 / 修改名字</button>`}</h2>
+    ${S.empty ? `<div class="note" style="margin-bottom:10px">这个数据集还没有保存的条目。先填好物品名字、选好“当前物品”，再在服务器上运行 <code>~/nero_record.sh ${esc(Object.entries(TASKS).find(([k, t]) => t.dataset === cur)?.[0] || cur)}</code></div>` : ""}
+    <div class="islots">${ks.map(slot).join("")}</div></section>`;
+}
+function wireItems() {
+  document.querySelectorAll("[data-drop]").forEach(el => {
+    el.ondragover = ev => { ev.preventDefault(); el.classList.add("over"); };
+    el.ondragleave = () => el.classList.remove("over");
+    el.ondrop = ev => { ev.preventDefault(); el.classList.remove("over"); try { moveTo(JSON.parse(ev.dataTransfer.getData("text/plain")), +el.dataset.drop); } catch (e) {} };
+  });
+  document.querySelectorAll(".ibad").forEach(a => a.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); GAL.item = a.dataset.bad; GAL.bad = true; GAL.page = 0;
+    $("#gal").innerHTML = galleryCard(); wireGallery(); $("#gal").scrollIntoView({ behavior: "smooth" }); });
+  document.querySelectorAll("[data-open]").forEach(a => a.onclick = ev => { ev.preventDefault(); showEp(+a.dataset.open); });
+  document.querySelectorAll("[data-cur]").forEach(el => el.onclick = () => postLabels({ current: +el.dataset.cur }));
+  if ($("#iedit")) $("#iedit").onclick = () => { EDIT_ITEMS = true; render(); };
+  if ($("#icancel")) $("#icancel").onclick = () => { EDIT_ITEMS = false; render(); };
+  if ($("#iadd")) $("#iadd").onclick = () => { const ks = Object.keys(S.labels.items).map(Number); const n = (ks.length ? Math.max(...ks) : 0) + 1; S.labels.items[String(n)] = ""; render(); };
+  if ($("#isave")) $("#isave").onclick = async () => { const items = {}; document.querySelectorAll(".islot input").forEach(i => items[i.dataset.k] = i.value.trim());
+    const r = await postLabels({ items }); if (r.ok) { EDIT_ITEMS = false; render(); } else alert("保存失败：" + r.error); };
+}
+
+/* ---------- 图表 ---------- */
+function lineChart(el, t, series, o) {
+  const W = el.clientWidth || 760, H = o.h || 220, L = 40, R = 12, T = 10, B = 24;
+  const on = series.filter(s => s.on !== false); const all = on.flatMap(s => s.y);
+  let lo = Math.min(...all), hi = Math.max(...all); if (!isFinite(lo)) { lo = 0; hi = 1; } if (hi - lo < 1e-6) { hi = lo + 1; }
+  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad; const tx = t[t.length - 1] || 1;
+  const X = v => L + (W - L - R) * v / tx, Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label)}">`;
+  (o.bands || []).forEach(b => s += `<rect x="${X(b.t0)}" y="${T}" width="${Math.max(2, X(b.t1) - X(b.t0))}" height="${H - T - B}" fill="var(--hold)"/>`);
+  for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4; s += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v.toFixed(0)}</text>`; }
+  for (let i = 0; i <= 5; i++) { const v = tx * i / 5; s += `<text class="ax" x="${X(v)}" y="${H - 6}" text-anchor="middle">${v.toFixed(0)}s</text>`; }
+  s += `<text class="ax" x="${L}" y="${T - 1}">${esc(o.unit)}</text>`;
+  on.forEach(se => s += `<polyline points="${se.y.map((y, i) => `${X(t[i]).toFixed(1)},${Y(y).toFixed(1)}`).join(" ")}" fill="none" stroke="var(${se.c})" stroke-width="2" stroke-linejoin="round" ${se.dash ? 'stroke-dasharray="5 4"' : ""}/>`);
+  s += `<line class="xh" id="xh" x1="0" x2="0" y1="${T}" y2="${H - B}" style="display:none"/><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" class="hit"/></svg><div class="tip"></div>`;
+  el.innerHTML = s;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), xh = el.querySelector("#xh");
+  const move = ev => { const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width; const tv = (px - L) / (W - L - R) * tx;
+    let i = 0, bd = 1e9; t.forEach((v, k) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; i = k; } });
+    xh.setAttribute("x1", X(t[i])); xh.setAttribute("x2", X(t[i])); xh.style.display = "";
+    tip.innerHTML = `<div class="meta">${t[i].toFixed(1)} s</div>` + on.map(se => `<div class="r"><i style="background:var(${se.c})"></i>${esc(se.name)} <b>${se.y[i].toFixed(1)}</b>${esc(o.u || "")}</div>`).join("") + (o.extra ? o.extra(t[i]) : "");
+    tip.style.display = "block"; const lx = X(t[i]) * r.width / W; tip.style.left = Math.min(Math.max(0, lx + 12), r.width - tip.offsetWidth) + "px"; tip.style.top = "8px"; };
+  svg.querySelector(".hit").addEventListener("pointermove", move);
+  svg.querySelector(".hit").addEventListener("pointerleave", () => { tip.style.display = "none"; xh.style.display = "none"; });
+}
+function timeline(el, e) {
+  const W = el.clientWidth || 760, L = 70, R = 12, rowH = 22, lanes = [["step", "step"], ["阶段", "phase"], ["移动", "move"], ["夹爪", "grip"], ["夹住", "hold"]];
+  const H = lanes.length * (rowH + 6) + 22, tx = e.length_s || 1, X = v => L + (W - L - R) * v / tx;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="时间线">`; const items = [];
+  lanes.forEach(([nm], k) => s += `<text class="ax" x="0" y="${k * (rowH + 6) + 15}">${nm}</text><line class="gl" x1="${L}" x2="${W - R}" y1="${k * (rowH + 6) + rowH + 2}" y2="${k * (rowH + 6) + rowH + 2}"/>`);
+  const box = (k, t0, t1, c, txt) => { const y = k * (rowH + 6) + 2; items.push(txt); s += `<rect x="${X(t0)}" y="${y}" width="${Math.max(3, X(t1) - X(t0) - 2)}" height="${rowH - 2}" rx="4" fill="var(${c})" data-i="${items.length - 1}" class="tb"/>`; };
+  (e.steps || []).forEach(x => { box(0, x.t0, x.t1, STC[x.step] || "--ph-none", `step ${x.step} ${x.name} ${x.t0}–${x.t1} s`); if (X(x.t1) - X(x.t0) > 30) s += `<text x="${X(x.t0) + 6}" y="${15}" fill="#fff" font-size="11" pointer-events="none">${x.step} ${esc(x.name)}</text>`; });
+  if (!(e.steps || []).length) s += `<text class="ax" x="${L + 4}" y="15">没有 step 记录</text>`;
+  e.phases.forEach(p => box(1, p.t0, p.t1, PH[p.name] || "--ph-none", `${p.name} ${p.t0}–${p.t1} s`));
+  e.segments.forEach(g => { if (g.kind === "move") box(2, g.t0, g.t1, "--ink3", `${g.t0}–${g.t1} s ${g.text}`);
+    if (g.kind === "close" || g.kind === "open") box(3, g.t0, g.t1, g.kind === "close" ? "--s7" : "--s4", `${g.t0}–${g.t1} s ${g.text}`);
+    if (g.kind === "hold") box(4, g.t0, g.t1, "--ph-task", `${g.t0}–${g.t1} s ${g.text}`); });
+  for (let i = 0; i <= 5; i++) { const v = tx * i / 5; s += `<text class="ax" x="${X(v)}" y="${H - 4}" text-anchor="middle">${v.toFixed(0)}s</text>`; }
+  el.innerHTML = s + `</svg><div class="tip"></div>`;
+  const tip = el.querySelector(".tip"), svg = el.querySelector("svg");
+  el.querySelectorAll(".tb").forEach(r => { r.style.cursor = "default";
+    r.addEventListener("pointerenter", ev => { tip.textContent = items[+r.dataset.i]; tip.style.display = "block"; const rr = svg.getBoundingClientRect(), b = r.getBoundingClientRect();
+      tip.style.left = Math.min(b.left - rr.left, rr.width - tip.offsetWidth) + "px"; tip.style.top = (b.bottom - rr.top + 4) + "px"; });
+    r.addEventListener("pointerleave", () => tip.style.display = "none"); });
+  el.insertAdjacentHTML("beforeend", `<div class="legend" style="margin-top:4px">${["复位","定位移动","任务遥操作"].map(k => `<span><i style="background:var(${PH[k]})"></i>${k}</span>`).join("")}<span><i style="background:var(--s7)"></i>闭合</span><span><i style="background:var(--s4)"></i>张开</span><span><i style="background:var(--ph-task)"></i>夹住</span></div>`);
+}
+
+/* ---------- 单条详情 ---------- */
+const jOn = Array(7).fill(true);
+async function showEp(k, keep) {
+  openEp = k; const idx = S.items.findIndex(x => x.episode === k); if (idx < 0) return closeEp();
+  if (!keep) history.replaceState(null, "", `#${encodeURIComponent(cur)}/${k}`);
+  $("#dw").classList.add("open");
+  const d = $("#drawer"); const it = S.items[idx];
+  if (!EPC[k]) { d.innerHTML = `<div class="dh"><h2>#${k}</h2></div><div class="db"><div class="empty">读取中…</div></div>`;
+    try { const pad = String(k).padStart(4, "0"); EPC[k] = await getJSON(`${RB(cur)}episodes/view_${pad}.json`).catch(() => getJSON(`${RB(cur)}episodes/ep_${pad}.json`)); } catch (e) { d.querySelector(".db").innerHTML = `<div class="empty">读取失败</div>`; return; } }
+  const e = EPC[k], tr = e.trace, base = RB(cur);
+  const prev = S.items[idx - 1], next = S.items[idx + 1];
+  d.innerHTML = `<div class="dh"><h2>第 ${k} 条 ${res(e.result)}</h2><span class="sp"></span>
+      <button class="ib" id="pv" ${prev ? "" : "disabled"} title="上一条（←）">‹</button><button class="ib" id="nx" ${next ? "" : "disabled"} title="下一条（→）">›</button><button class="ib" id="cl" title="关闭（Esc）">✕</button></div>
+    <div class="db">
+      <div class="meta">${e.length_s} s · ${e.frames} 帧 · ${e.fps} Hz · 录于 ${esc(e.recorded)} · ${esc(e.task)}${e.sync ? ` · 两相机时间差 平均 ${e.sync.mean_ms} ms / 最大 <b class="${e.sync.max_ms <= 20 ? "ok-i" : "bad-i"}">${e.sync.max_ms} ms</b>` : ""}</div>
+      ${S.labels?.has_item_field ? `<div class="card" style="padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>物品</b>
+        ${SINGLE ? `<span>${esc(it.item_name || "未标")}</span>` : `<select id="epitem" style="font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)">
+          <option value="0">未标</option>${Object.entries(S.labels.items).map(([k, v]) => `<option value="${k}" ${String(it.item) === k ? "selected" : ""}>${k} · ${esc(v || "物品 " + k)}</option>`).join("")}</select>`}
+        ${it.item_pending ? `<span class="chip" style="border-color:var(--warn);color:var(--warn)">已改 · 未写入数据集</span>` : ""}<span class="meta" id="epmsg"></span></div>` : ""}
+      <div class="mk"><div><b>${e.length_s}s</b><span>时长</span></div><div><b>${e.gripper_range_mm}</b><span>夹爪行程 mm</span></div><div><b>${(e.holds || []).length}</b><span>夹住次数</span></div><div><b>${e.action_state_diff_deg}°</b><span>动作−状态差</span></div></div>
+      ${e.phases.some(p => p.name !== "任务遥操作") ? `<div class="note">这条包含 ${esc(e.phases.filter(p => p.name !== "任务遥操作").map(p => p.name).join("、"))} 阶段（${e.phases.map(p => `${p.name} ${p.t0}–${p.t1}s`).join("，")}）。</div>` : ""}
+      ${(e.steps || []).length ? `<div class="card" id="stepcard"></div>` : ""}
+      <div class="card"><h2>时间线 <small>悬停看细节</small></h2><div class="chart" id="tl"></div></div>
+      <div class="card"><h2>夹爪 <small>从臂实际 vs 主臂指令，绿色底 = 夹住物体</small></h2>
+        <div class="legend" style="margin-bottom:6px"><span><i style="background:var(--s1)"></i>从臂实际宽度</span><span><i style="background:var(--s2)"></i>主臂指令（虚线）</span><span><i style="background:var(--hold)"></i>夹住</span></div><div class="chart" id="gc"></div></div>
+      <div class="card"><h2>关节角 <small>点按钮隐藏/显示</small></h2><div class="lgt" id="jl">${JN.map((n, i) => `<button aria-pressed="${jOn[i]}" data-j="${i}"><i style="background:var(${SER[i]})"></i>${n}</button>`).join("")}</div><div class="chart" id="jc"></div></div>
+      <div class="card"><h2>动作分段</h2><div class="segs">${e.segments.map(g => `<div class="sg"><span class="t">${g.t0.toFixed(1)}–${g.t1.toFixed(1)} s</span><span class="p">${esc(g.step || g.phase || "")}</span><span>${esc(g.text)}</span></div>`).join("") || `<div class="meta">没有检测到明显的动作</div>`}</div></div>
+      <div class="card"><h2>画面 <small>开始 / 中间 / 结束</small></h2>${Object.keys(e.images || {}).length ? Object.entries(e.images).map(([cam, l]) => `<div class="meta" style="margin:4px 0">${cam === "front" ? "头部 front" : cam === "wrist" ? "腕部 wrist" : esc(cam)}</div><div class="imgs">${l.map(x => `<figure><img loading="lazy" src="${base}${x.file}" alt="${esc(cam)} ${x.tag}"><figcaption>${x.tag} · ${x.t} s</figcaption></figure>`).join("")}</div>`).join("") : `<div class="meta">离线生成的条目没有截图</div>`}</div>
+      ${SINGLE ? "" : `<div class="card"><h2>删除 / 重录这一条 <small>${badSync(it) ? `<b style="color:var(--bad)">这条${badSync(it)}，建议删掉重录</b>` : "录错了、不合格时用"}</small></h2>
+        <ol style="margin:0;padding-left:20px;font-size:13.5px;display:flex;flex-direction:column;gap:8px">
+          <li>先结束录制（复位阶段按 <kbd>Esc</kbd>）。删除时录制程序不能在运行。</li>
+          <li>删除第 ${k} 条（会问 yes；后面的条自动往前补号；原数据集备份到 <code>lerobot_data/_trash/</code>）：${codeBox(`source ~/env_evo.sh\npython ~/nero_delete.py /data/panhe/lerobot_data/${cur} ${k}`)}</li>
+          <li>核对：${codeBox(`python ~/nero_verify.py /data/panhe/lerobot_data/${cur}`)}</li>
+          <li>重录：${S.labels?.has_item_field && it.item ? `先把“当前物品”设为这条的物品 <button class="btn" id="setcur">设为 ${esc(it.item_name)}</button>，再` : ""}接着录（同一个数据集，自动接在最后）：${codeBox(`source ~/env_evo.sh\n~/nero_record.sh ${Object.entries(TASKS).find(([kk, t]) => t.dataset === cur)?.[0] || `${cur} "${S.task}"`}`)}</li>
+        </ol></div>`}
+    </div>`;
+  if ($("#epitem")) $("#epitem").onchange = async ev => { $("#epmsg").textContent = "保存中…";
+    const r = await postLabels({ episode: k, item: +ev.target.value }); const m = $("#epmsg"); if (m) m.textContent = r.ok ? "已保存" : "保存失败：" + r.error; };
+  if ($("#setcur")) $("#setcur").onclick = async () => { const r = await postLabels({ current: it.item }); $("#setcur").textContent = r.ok ? "已设为当前" : "失败"; };
+  $("#pv").onclick = () => prev && showEp(prev.episode); $("#nx").onclick = () => next && showEp(next.episode); $("#cl").onclick = closeEp;
+  const draw = () => {
+    timeline($("#tl"), e);
+    lineChart($("#gc"), tr.t, [{ name: "从臂实际", y: tr.gripper, c: "--s1" }, ...(tr.gripper_cmd ? [{ name: "主臂指令", y: tr.gripper_cmd, c: "--s2", dash: 1 }] : [])], { h: 170, unit: "mm", u: " mm", label: "夹爪宽度", bands: e.holds || [] });
+    lineChart($("#jc"), tr.t, tr.joints.map((y, i) => ({ name: JN[i], y, c: SER[i], on: jOn[i] })), { h: 240, unit: "°", u: "°", label: "关节角" });
+  };
+  requestAnimationFrame(() => { draw(); if ($("#stepcard")) stepView(e); relabel(d); });
+  d.querySelectorAll("#jl button").forEach(b => b.onclick = () => { const i = +b.dataset.j; jOn[i] = !jOn[i]; if (!jOn.some(Boolean)) jOn[i] = true; b.setAttribute("aria-pressed", jOn[i]); lineChart($("#jc"), tr.t, tr.joints.map((y, j) => ({ name: JN[j], y, c: SER[j], on: jOn[j] })), { h: 240, unit: "°", u: "°", label: "关节角" }); });
+}
+/* ---------- step 分段：查看 / 调整分界 ---------- */
+function stepBadge(e) { const x = e.steps_edit; if (!x) return ""; return x.applied ? `<span class="chip">已修正 · 已写入数据集</span>` : `<span class="chip" style="border-color:var(--warn);color:var(--warn)">已修正 · 未写入数据集</span>`; }
+function stepView(e) {
+  const c = $("#stepcard");
+  c.innerHTML = `<h2>step 分段 ${stepBadge(e)}<span style="flex:1"></span>${SINGLE ? "" : `<button class="btn" id="sedit">✎ 调整分界</button>`}</h2><div class="segs">${e.steps.map(x => `<div class="sg"><span class="t">${x.t0.toFixed(1)}–${x.t1.toFixed(1)} s</span><span class="p">${(x.t1 - x.t0).toFixed(1)} s</span><span><span class="res" style="background:var(${STC[x.step]});color:#fff">${x.step}</span> ${esc(x.name)}</span></div>`).join("")}</div>`
+    + (e.steps_edit && !e.steps_edit.applied && !SINGLE ? `<div class="note" style="margin-top:8px">修正保存在报告里，训练前要写进数据集（录制结束后）：<br><code>source ~/env_evo.sh; python ~/nero_steps_apply.py /data/panhe/lerobot_data/${esc(cur)}</code></div>` : "");
+  if ($("#sedit")) $("#sedit").onclick = () => stepEdit(e);
+}
+function stepRefs(e) {
+  const r = [];
+  (e.holds || []).forEach(h => { r.push({ t: h.t0, l: "夹住" }); r.push({ t: h.t1, l: "松开" }); });
+  (e.segments || []).forEach(g => { if (g.kind === "close") r.push({ t: g.t0, l: "开始闭合" }); if (g.kind === "open") r.push({ t: g.t0, l: "开始张开" }); });
+  r.sort((a, b) => (a.l === "夹住" || a.l === "松开" ? 0 : 1) - (b.l === "夹住" || b.l === "松开" ? 0 : 1));
+  const out = []; r.forEach(x => { if (!out.some(y => Math.abs(y.t - x.t) < 0.8)) out.push(x); });
+  return out.sort((a, b) => a.t - b.t);
+}
+function stepEdit(e) {
+  const c = $("#stepcard"), L = e.length_s, refs = stepRefs(e);
+  const SN = S.step_names || {1: "抓", 2: "移动", 3: "放置", 4: "离开"}, names = Object.values(SN);
+  const K = S.fail ? Math.max(1, ...e.steps.map(y => y.step)) : Object.keys(SN).length;
+  // 每个 step 的起点；漏按的 step 先放在下一个 step 起点前 1 s，拖到正确位置即可
+  let B = []; for (let k = 2; k <= K; k++) { const x = e.steps.find(y => y.step === k); B.push(x ? x.t0 : null); }
+  for (let k = B.length - 1; k >= 0; k--) if (B[k] == null) B[k] = Math.max(0.1 * (k + 1), (k + 1 < B.length ? B[k + 1] : L) - 1);
+  for (let k = 1; k < B.length; k++) if (B[k] <= B[k - 1]) B[k] = Math.min(L - 0.1, B[k - 1] + 0.1);
+  const missing = Object.keys(SN).map(Number).filter(k => k <= K && !e.steps.some(y => y.step === k));
+  const orig = e.steps_orig ? e.steps_orig.slice(1).map(x => x.t0) : null;
+  c.innerHTML = `<h2>调整 step 分界 <small>拖动竖线，或直接改数字；靠近参考线 0.3 s 内会吸附</small></h2>${missing.length ? `<div class="note" style="margin-bottom:8px">这一条没有 step ${missing.join("、")}（漏按），已先补一条分界线，拖到正确位置再保存</div>` : ""}
+    <div class="chart" id="sed" style="touch-action:none"></div>
+    <div id="sin" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:10px 0"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" id="ssave" style="background:var(--ink);color:var(--bg);border-color:var(--ink)">保存</button><button class="btn" id="scancel">取消</button>${e.steps_edit ? `<button class="btn" id="sreset">恢复录制时的分界</button>` : ""}<span class="meta" id="smsg"></span></div>`;
+  const el = $("#sed"), tr = e.trace;
+  const draw = () => {
+    const W = el.clientWidth || 760, H = 140, Lp = 8, R = 8, T = 22, Bt = 22, X = v => Lp + (W - Lp - R) * v / L, Tv = px => (px - Lp) / (W - Lp - R) * L;
+    const gm = Math.max(1, ...tr.gripper), gy = v => T + 8 + (H - T - Bt - 16) * (1 - v / gm);
+    const edges = [0, ...B, L];
+    let s = `<svg viewBox="0 0 ${W} ${H}">`;
+    edges.slice(0, -1).forEach((a, k) => { s += `<rect x="${X(a)}" y="${T}" width="${Math.max(1, X(edges[k + 1]) - X(a))}" height="${H - T - Bt}" fill="var(${STC[k + 1]})" opacity=".22"/><text x="${X(a) + 5}" y="${T + 14}" class="ax" style="fill:var(--ink)">${k + 1} ${esc(names[k])}</text>`; });
+    s += `<polyline points="${tr.t.map((t, i) => `${X(t).toFixed(1)},${gy(tr.gripper[i]).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--ink3)" stroke-width="1.5"/>`;
+    refs.forEach((r, i) => s += `<line x1="${X(r.t)}" x2="${X(r.t)}" y1="${T}" y2="${H - Bt}" stroke="var(--ink3)" stroke-dasharray="3 3"/><text x="${X(r.t)}" y="${H - (i % 2 ? 2 : 11)}" class="ax" text-anchor="middle">${esc(r.l)} ${r.t.toFixed(1)}</text>`);
+    if (orig) orig.forEach(o => s += `<line x1="${X(o)}" x2="${X(o)}" y1="${T}" y2="${H - Bt}" stroke="var(--bad)" stroke-width="1" opacity=".5"/>`);
+    B.forEach((b, k) => s += `<g class="hd" data-k="${k}" style="cursor:ew-resize"><rect x="${X(b) - 9}" y="0" width="18" height="${H - Bt + 2}" fill="transparent"/><line x1="${X(b)}" x2="${X(b)}" y1="${T - 4}" y2="${H - Bt}" stroke="var(--ink)" stroke-width="2.5"/><rect x="${X(b) - 22}" y="0" width="44" height="17" rx="5" fill="var(--ink)"/><text x="${X(b)}" y="12" text-anchor="middle" font-size="11" fill="var(--bg)">${b.toFixed(1)}s</text></g>`);
+    el.innerHTML = s + `</svg>`;
+    el.querySelectorAll(".hd").forEach(h => h.onpointerdown = ev => {
+      const k = +h.dataset.k; ev.preventDefault();
+      const mv = e2 => { const r = el.getBoundingClientRect(); let t = Tv((e2.clientX - r.left) * W / r.width);
+        const sn = refs.find(x => Math.abs(x.t - t) < 0.3); if (sn) t = sn.t;
+        const lo = (k ? B[k - 1] : 0) + 0.1, hi = (k < B.length - 1 ? B[k + 1] : L) - 0.1; B[k] = Math.round(Math.min(Math.max(t, lo), hi) * 10) / 10; draw(); inputs(); };
+      const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); };
+      addEventListener("pointermove", mv); addEventListener("pointerup", up); });
+  };
+  const inputs = () => { $("#sin").innerHTML = B.map((b, k) => `<label class="meta" style="display:flex;flex-direction:column;gap:2px">${k + 1} ${esc(names[k])} → ${k + 2} ${esc(names[k + 1])}<input type="number" step="0.1" min="0" max="${L}" value="${b.toFixed(1)}" data-k="${k}" style="font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)"></label>`).join("");
+    $("#sin").querySelectorAll("input").forEach(i => i.onchange = () => { B[+i.dataset.k] = +i.value; draw(); }); };
+  draw(); inputs();
+  const send = async bounds => { $("#smsg").textContent = "保存中…";
+    try { const r = await fetch("api/steps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataset: cur, episode: e.episode, bounds }) });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error); delete EPC[e.episode]; lastGen = {}; await poll(true); showEp(e.episode, true);
+    } catch (er) { $("#smsg").textContent = String(er.message).includes("Failed") || String(er.message).includes("404") ? "保存失败：报告服务是旧版（只读），请用新版 ~/nero_report_serve.sh 启动" : "保存失败：" + er.message; } };
+  $("#ssave").onclick = () => { for (let k = 0; k < B.length; k++) if (!((k ? B[k - 1] : 0) < B[k] && B[k] < (B[k + 1] ?? L))) { $("#smsg").textContent = "分界要从小到大"; return; } send(B); };
+  $("#scancel").onclick = () => stepView(e);
+  if ($("#sreset")) $("#sreset").onclick = () => send(null);
+}
+function closeEp() { openEp = null; $("#dw").classList.remove("open"); if (cur) history.replaceState(null, "", `#${encodeURIComponent(cur)}`); }
+$("#scrim").onclick = closeEp;
+addEventListener("keydown", ev => { if (openEp == null) return; const i = S.items.findIndex(x => x.episode === openEp);
+  if (ev.key === "Escape") closeEp(); if (ev.key === "ArrowLeft" && S.items[i - 1]) showEp(S.items[i - 1].episode); if (ev.key === "ArrowRight" && S.items[i + 1]) showEp(S.items[i + 1].episode); });
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (openEp != null) showEp(openEp, true); }, 200); });
+
+/* ---------- 物品叫法：测水温里叫“容器” ---------- */
+const IL = () => S?.labels?.item_label || "物品";
+function relabel(root) {
+  const L = IL(); if (!root || L === "物品") return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n;
+  while ((n = w.nextNode())) if (n.nodeValue.includes("物品")) n.nodeValue = n.nodeValue.replaceAll("物品", L);
+  root.querySelectorAll("[title],[placeholder]").forEach(el => { for (const a of ["title", "placeholder"]) { const v = el.getAttribute(a); if (v && v.includes("物品")) el.setAttribute(a, v.replaceAll("物品", L)); } });
+}
+
+/* ---------- 采集控制：按钮 → 服务器 → tmux 送进录制终端；定位开关 ---------- */
+const MODE = { prep: "准备（不录）", start: "启动中", rec: "录制中", reset: "复位（不录）", busy: "保存中" };
+let CTL = { st: null, msg: "", err: false, busy: false, open: true };
+try { CTL.open = localStorage.getItem("nero-ctl-term") !== "0"; } catch (e) {}
+async function ctlPoll() {
+  if (SINGLE) return;
+  try { const r = await fetch("api/ctl_state?t=" + Date.now()); CTL.st = r.ok ? await r.json() : null; } catch (e) { CTL.st = null; }
+  ctlRender(); setTimeout(ctlPoll, 1000);
+}
+async function ctlDo(action, extra = {}, ask = null) {
+  if (ask && !confirm(ask)) return;
+  CTL.busy = true; CTL.msg = "…"; CTL.err = false; ctlRender();
+  try {
+    const r = await fetch("api/ctl", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
+    const j = await r.json(); CTL.msg = j.ok ? j.message : j.error; CTL.err = !j.ok;
+  } catch (e) { CTL.msg = "请求失败：" + e.message; CTL.err = true; }
+  CTL.busy = false; ctlRender();
+}
+function ctlRender() {
+  const box = $("#ctl"); if (!box || SINGLE) return;
+  const ae = document.activeElement; if (ae && box.contains(ae) && ae.tagName === "SELECT") return;   // 正在选预设时不刷新
+  if ($("#cpre")) CTL.preset = $("#cpre").value;
+  const st = CTL.st; box.hidden = false;
+  if (!st) { box.innerHTML = `<div class="box"><h2>采集控制</h2><div class="msg err">连不上控制接口（报告服务要用 10-29 的新版本，并且在 tmux 里运行）</div></div>`; return; }
+  const lv = st.live && st.live.fresh ? st.live : null, mode = st.running ? (lv ? lv.mode : "start") : null;
+  const on = (k) => ({ prep: ["next", "esc"], start: ["esc"], rec: ["1", "2", "3", "4", "5", "6", "s", "f", "discard", "esc"], reset: ["next", "discard", "esc"], busy: [] }[mode] || []).includes(k) && !CTL.busy;
+  const steps = (lv && lv.steps) || {}, il = (lv && lv.item_label) || "物品";
+  const presets = Object.entries(TASKS).filter(([k, t]) => t.task);
+  const b = (k, label, cls = "", title = "") => `<button class="btn kb ${cls}" data-k="${k}" ${on(k) ? "" : "disabled"} title="${esc(title)}">${label}</button>`;
+  let head, rows = "";
+  if (!st.running) {
+    head = `<h2>采集控制 <span class="mode">录制程序未运行</span></h2>`;
+    rows = `<div class="row"><select id="cpre">${presets.map(([k, t]) => `<option value="${k}" ${CTL.preset === k ? "selected" : ""}>${esc(t.name || k)} → ${esc(t.dataset)}</option>`).join("")}</select>
+      <button class="btn kb big ok" id="cstart" ${CTL.busy || st.pane_busy ? "disabled" : ""}>▶ 开始采集</button>
+      <span class="meta">在终端 ${esc(st.target)} 运行 nero_record.sh；会先检查使能、相机、主从对齐${st.pane_busy ? ` · 终端里有程序在运行（${esc(st.pane_cmd)}），看下面的输出` : ""}</span>
+      <button class="btn kb" id="cyes" ${st.pane_busy && !CTL.busy ? "" : "disabled"} title="开录前检查要求主臂对齐时，在终端输入 yes">输入 yes</button></div>`;
+  } else {
+    head = `<h2>采集控制 <span class="mode ${mode}">${MODE[mode] || mode}</span>
+      ${lv ? `<span>${esc(lv.dataset)} · 第 ${lv.ep} 条</span><span>${esc(il)}：${lv.item ? esc(lv.item + " · " + lv.item_name) : "未选"}</span>
+      <span>定位：<b style="color:var(${lv.positioning ? "--acc" : "--ink2"})">${lv.positioning ? "开（网页可以移动从臂）" : "关（主臂控制从臂）"}</b></span>` : `<span class="meta">等录制程序启动…（开录前检查要十几秒）</span>`}</h2>`;
+    rows = `<div class="row">
+      <button class="btn kb big" id="cpon" ${lv && !lv.positioning && mode !== "rec" && !CTL.busy ? "" : "disabled"}>定位开</button>
+      <button class="btn kb big" id="cpoff" ${lv && lv.positioning && !CTL.busy ? "" : "disabled"}>定位关</button>
+      <span style="width:12px"></span>
+      ${b("next", mode === "reset" ? `→ 保存第 ${lv?.ep} 条，开始下一条` : "→ 开始录制", "big ok")}
+      ${b("discard", "← 丢弃", "no", "录制中：丢弃这一条回到准备；复位时：丢弃刚标记的那条")}
+      ${b("esc", "Esc 结束", "", "复位时保存已标记的那条并结束；准备时直接结束；录制中丢弃这一条并结束")}
+      <button class="btn kb" id="cyes" ${CTL.busy ? "disabled" : ""} title="程序在等输入 yes 时用">输入 yes</button></div>
+      <div class="row"><span class="meta">step：</span>${Object.entries(steps).map(([k, v]) => b(k, `${k} ${esc(v)}`, lv && mode === "rec" && String(lv.step) === k ? "stepon" : "")).join("")}
+      <span style="width:12px"></span>${lv && lv.fail ? b("f", `f 失败（结束这一条，记为 F${lv.step} ${esc((lv.fail_types || {})[lv.step] || "")}）`, "big no") : b("s", "s 成功（结束这一条）", "big ok")}</div>`;
+  }
+  const pg = st.running && st.progress ? st.progress : null;
+  const fpg = pg && pg.fail ? `<div class="prog fprog">${pg.fail.types.map(t => `<div class="ft${pg.fail.suggest === t.k ? " sug" : ""}"><b>F${esc(t.k)} ${esc(t.name)}</b>
+      <span class="big">${t.good}<small style="font-size:13px;font-weight:400"> / ${pg.fail.per}</small></span><div class="pbar2"><span style="width:${Math.min(100, t.good / pg.fail.per * 100)}%"></span></div>
+      <span class="meta">${t.total > t.good ? `另有 ${t.total - t.good} 条有问题` : pg.fail.suggest === t.k ? "建议下一条做这种" : t.good >= pg.fail.per ? "已采满" : ""}</span></div>`).join("")}
+      ${pg.last ? `<span class="last ${pg.last.issues.length ? "bad" : "ok"}">刚保存：第 ${pg.last.episode} 条${pg.last.fail_type ? " · F" + pg.last.fail_type : ""} ${pg.last.issues.length ? "⚠ " + esc(pg.last.issues.join("；")) : "✓ 正常"}</span>` : ""}
+      ${pg.fail.suggest ? "" : `<b class="ok-i">四种失败都采满了</b>`}</div>` : "";
+  const prog = pg && pg.fail ? fpg : pg ? `<div class="prog"><span>${esc(il)} <b>${esc(pg.cur)} · ${esc(pg.name || "未命名")}</b></span>
+      <span class="big">${pg.good}<small style="font-size:13px;font-weight:400"> / ${pg.per}</small></span><div class="pbar2"><span style="width:${Math.min(100, pg.good / pg.per * 100)}%"></span></div>
+      <span class="meta">合格（成功且没问题）${pg.total > pg.good ? ` · 另有 ${pg.total - pg.good} 条有问题` : ""}</span>
+      ${pg.last ? `<span class="last ${pg.last.issues.length ? "bad" : "ok"}">刚保存：第 ${pg.last.episode} 条 ${pg.last.issues.length ? "⚠ " + esc(pg.last.issues.join("；")) : "✓ 正常"}</span>` : ""}
+      ${pg.good >= pg.per ? (pg.next ? `<button class="btn kb ok" id="cnext" data-k2="${esc(pg.next.k)}">已采满 → 切到 ${esc(pg.next.k)} · ${esc(pg.next.name)}</button>` : `<b class="ok-i">全部${esc(il)}都采满了</b>`) : ""}</div>` : "";
+  box.innerHTML = `<div class="box">${head}${prog}${rows}<div class="msg ${CTL.err ? "err" : ""}">${esc(CTL.msg)}</div>
+    <details ${CTL.open ? "open" : ""} id="cterm"><summary>终端 ${esc(st.target)}（最近 28 行）</summary><pre class="term">${esc(st.pane || "")}</pre></details></div>`;
+  box.querySelectorAll("[data-k]").forEach(x => x.onclick = () => ctlDo(x.dataset.k, {}, x.dataset.k === "esc" ? "结束录制？（复位阶段会先保存已标记的那条）" : null));
+  if ($("#cstart")) $("#cstart").onclick = () => ctlDo("start", { preset: $("#cpre").value }, `开始采集「${TASKS[$("#cpre").value]?.name}」？先确认从臂已使能、相机在跑、手放急停。`);
+  if ($("#cyes")) $("#cyes").onclick = () => ctlDo("yes", {}, "在终端输入 yes？（开录前检查要主臂转到从臂姿态时才需要；主臂会动）");
+  if ($("#cpon")) $("#cpon").onclick = () => ctlDo("pos_on");
+  if ($("#cnext")) $("#cnext").onclick = async () => {
+    const k = +$("#cnext").dataset.k2, ds = lv.dataset;
+    const r = await fetch("api/labels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataset: ds, current: k }) }).then(x => x.json()).catch(e => ({ ok: false, error: e.message }));
+    CTL.msg = r.ok ? `已切到 ${k} 号，下一条开始生效` : "切换失败：" + r.error; CTL.err = !r.ok; ctlRender(); if (r.ok && ds === cur) poll(true);
+  };
+  if ($("#cpoff")) $("#cpoff").onclick = () => ctlDo("pos_off", {}, "关定位？确认网页已显示 Target reached 并等了 2 秒。关掉后主臂重新控制从臂。");
+  const t = $("#cterm"); if (t) { t.ontoggle = () => { CTL.open = t.open; try { localStorage.setItem("nero-ctl-term", t.open ? "1" : "0"); } catch (e) {} }; const pre = t.querySelector("pre"); pre.scrollTop = pre.scrollHeight; }
+}
+if (!SINGLE) ctlPoll();
+
+(async () => { await poll(true); const h = decodeURIComponent(location.hash.slice(1)).split("/"); if (h[1] && S) showEp(+h[1]); setInterval(poll, 5000); })();
+</script>
+</body>
+</html>
