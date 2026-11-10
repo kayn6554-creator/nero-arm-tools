@@ -142,5 +142,69 @@
     "4": "关键操作完成，但未能回到原位：折返、夹爪未松开、放偏"
    }
   }
+ },
+ "noise": {
+  "id": 7,
+  "name": "噪声测量",
+  "dataset": "nero_noise_v1",
+  "task": "pick up the noise meter and measure the noise",
+  "steps": {
+   "1": "抓取噪声检测仪",
+   "2": "移至测点",
+   "3": "测量噪声",
+   "4": "放回原位"
+  },
+  "item_slots": 1,
+  "per_item": 80,
+  "item_label": "测点",
+  "note": "抓起噪声检测仪（麦克风式），移到测点停留测量，放回原位；测点不区分"
+ },
+ "soil": {
+  "id": 8,
+  "name": "土壤检测",
+  "dataset": "nero_soil_v1",
+  "task": "pick up the soil probe and insert it into the soil to measure",
+  "steps": {
+   "1": "抓取土壤检测仪",
+   "2": "移至土壤上方",
+   "3": "插入土壤测量",
+   "4": "拔出并放回原位"
+  },
+  "item_slots": 1,
+  "per_item": 80,
+  "item_label": "测点",
+  "note": "抓起插入式土壤检测仪，移到土壤上方竖直插入，停留后拔出放回；测点不区分"
+ },
+ "irwater": {
+  "id": 9,
+  "name": "红外测水温",
+  "dataset": "nero_irwater_v1",
+  "task": "pick up the infrared thermometer and measure the water temperature in the container",
+  "steps": {
+   "1": "抓取红外测温仪",
+   "2": "移至容器上方",
+   "3": "对准水面测温",
+   "4": "放回原位"
+  },
+  "item_slots": 6,
+  "per_item": 10,
+  "item_label": "容器",
+  "note": "抓起红外测温仪，移到容器上方，对准水面停留（不按扳机），放回原位；容器名字在网页上填"
+ },
+ "irobj": {
+  "id": 10,
+  "name": "红外测物温",
+  "dataset": "nero_irobj_v1",
+  "task": "pick up the infrared thermometer and measure the temperature of the object",
+  "steps": {
+   "1": "抓取红外测温仪",
+   "2": "接近物体",
+   "3": "对准物体测温",
+   "4": "放回原位"
+  },
+  "item_slots": 6,
+  "per_item": 10,
+  "item_label": "物体",
+  "note": "抓起红外测温仪，移到物体前，对准物体停留（不按扳机），放回原位；物体名字在网页上填"
  }
 }

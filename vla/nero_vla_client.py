@@ -13,6 +13,13 @@
 返回：
   actions float[T, 8]      绝对关节目标 (rad) + 夹爪 (m)，T 步，每步 1/--action-hz 秒（数据集 10 Hz）
 
+周末实验（2026-11）新增：
+  --step-file F      每次推理前读 F 里的当前步骤（1~4，测试台按“本步完成”时更新），记进记录
+  --step-prompt      把步骤文本接到指令后面（M1/M2 这类带步骤训练的模型）；格式见 nero_steps.py
+  --variant NAME     实验变体标签（E0 / E1 / M1 ...），记进 summary
+  每次推理另存头部/腕部图像（images/），执行时按 --feedback-every 记录从臂实际位置（feedback.npz），
+  每块写 live_status.json 给测试台显示；夹爪越界不再拒绝整块，裁到 0~0.1 并计数
+
 安全：
   - 动作经 lerobot_robot_nero 插件下发：限位、单步限幅、对齐检查(5°)、跟踪误差(15°)、状态过期都由插件把关
   - 本脚本另外检查：metadata 维度、动作有限、相邻两步跳变、首帧离当前位置的距离
@@ -32,6 +39,9 @@ import time
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from nero_steps import CLIENT_TASKS, step_prompt  # noqa: E402  与训练代码同一份定义
 
 log = logging.getLogger("nero_vla")
 
@@ -149,8 +159,9 @@ def check_chunk(actions: np.ndarray, state: np.ndarray, args) -> list[str]:
         if jump > math.radians(args.max_jump_deg):
             problems.append(f"相邻两步最大跳变 {math.degrees(jump):.1f}° > {args.max_jump_deg}°")
     g = actions[:, 7]
-    if g.min() < -0.02 or g.max() > GRIPPER_MAX_M + 0.02:   # 合夹爪时模型常给略低于 0 的值，下发时截到 0~0.1
-        problems.append(f"夹爪超出 0~{GRIPPER_MAX_M} m：[{g.min():.3f}, {g.max():.3f}]（单位对吗？）")
+    # 11-03：夹爪略超 0~0.1 很常见（中位数约 -2 mm），下发时裁剪并计数；只有离谱的（单位错）才拒绝
+    if g.min() < -0.05 or g.max() > GRIPPER_MAX_M + 0.05:
+        problems.append(f"夹爪远超 0~{GRIPPER_MAX_M} m：[{g.min():.3f}, {g.max():.3f}]（单位对吗？）")
     return problems
 
 
@@ -238,9 +249,11 @@ class LatestCam:
             raise TimeoutError(f"{self} 超过 0.5 s 没有新画面")
         return frames
 
-    def read_nearest(self, stamp_ms: float):
+    def read_nearest(self, stamp_ms: float, min_recv: float = 0.0):
         with self._lock:
             frames = list(self._buf)
+        if min_recv > 0:
+            frames = [f for f in frames if f.recv >= min_recv] or frames[-1:]
         if not frames:
             raise TimeoutError(f"{self} 没有画面")
         return min(frames, key=lambda f: abs(f.stamp_ms - stamp_ms))
@@ -294,23 +307,28 @@ class NeroIO:
     def positioning(self) -> bool:
         return bool(getattr(self.robot, "_positioning", False))
 
-    def observe(self, max_sync_ms: float = 20.0, retry_s: float = 1.0):
-        """配对超过 max_sync_ms 时在 retry_s 内重试，返回最好的一组。"""
+    def observe(self, max_sync_ms: float = 20.0, retry_s: float = 1.0, after: float = 0.0):
+        """配对超过 max_sync_ms 时在 retry_s 内重试，返回最好的一组。after：只用这个时刻（monotonic）之后收到的帧。"""
         deadline = time.monotonic() + retry_s
         best = None
         while True:
-            got = self._observe_once()
+            got = self._observe_once(after)
             if best is None or got[3] < best[3]:
                 best = got
             if best[3] <= max_sync_ms or time.monotonic() > deadline:
                 return best
             time.sleep(0.03)
 
-    def _observe_once(self):
-        """返回 (state[8], head RGB, wrist RGB, 两相机时间差 ms, 头部画面年龄 ms, 腕部画面年龄 ms)。"""
+    def _observe_once(self, after: float = 0.0):
+        """返回 (state[8], head RGB, wrist RGB, 两相机时间差 ms, 头部画面年龄 ms, 腕部画面年龄 ms)。
+        after > 0 时两路都只在“after 之后收到”的帧里挑（11-06：以前腕部按时间戳就近配对，可能挑到停稳前的旧帧）。"""
         best = None
-        for h in self.head.recent(3):
-            w = self.wrist.read_nearest(h.stamp_ms)
+        heads = self.head.recent(3)
+        if after > 0 and hasattr(heads[0], "recv"):
+            heads = [f for f in heads if f.recv >= after] or heads[:1]
+        for h in heads:
+            w = (self.wrist.read_nearest(h.stamp_ms, min_recv=after) if isinstance(self.wrist, LatestCam)
+                 else self.wrist.read_nearest(h.stamp_ms))
             diff = abs(w.stamp_ms - h.stamp_ms)
             if best is None or diff < best[0]:
                 best = (diff, h, w)
@@ -325,7 +343,8 @@ class NeroIO:
 
 
 # ---------------------------------------------------------------- 执行
-def execute_chunk(io: NeroIO, actions: np.ndarray, start: np.ndarray, args) -> str:
+def execute_chunk(io: NeroIO, actions: np.ndarray, start: np.ndarray, args, fb: list | None = None,
+                  chunk: int = -1, stats: dict | None = None) -> str:
     """按 --control-hz 插值执行前 --exec-steps 步；返回结束原因。
     每一步按“放慢倍数”分配时间；如果某一步关节变化太大、按这个时间走会超过 --max-joint-vel-deg，
     就自动把这一步拉长（多插几帧），保证实际关节速度不超过上限。"""
@@ -347,7 +366,18 @@ def execute_chunk(io: NeroIO, actions: np.ndarray, start: np.ndarray, args) -> s
             target = prev + (goal - prev) * (j / sub)
             act = dict(zip(JOINT_KEYS, target[:7].tolist()))
             act["gripper.pos"] = float(np.clip(target[7], 0.0, GRIPPER_MAX_M))
+            if stats is not None and act["gripper.pos"] != float(target[7]):
+                stats["grip_clip"] = stats.get("grip_clip", 0) + 1
             io.robot.send_action(act)
+            tick = stats.setdefault("tick", 0) if stats is not None else 0
+            if stats is not None:
+                stats["tick"] = tick + 1
+            if fb is not None and args.feedback_every > 0 and tick % args.feedback_every == 0:
+                try:   # 从臂实际位置：区分“模型没预测到位”和“从臂没跟上”（H8）
+                    meas = obs_to_state(io.robot.get_observation())
+                    fb.append((time.time(), chunk, k, *target[:7], act["gripper.pos"], *meas))
+                except Exception as e:
+                    stats["fb_err"] = str(e)
             t_next += dt
             time.sleep(max(0.0, t_next - time.monotonic()))
         prev = goal
@@ -360,7 +390,10 @@ def execute_chunk(io: NeroIO, actions: np.ndarray, start: np.ndarray, args) -> s
 def run(args):
     mode = args.mode
     prompt = args.prompt or load_task_prompt(args.task)
-    log.info("模式 %s   任务：%s", mode, prompt)
+    task_key = CLIENT_TASKS.get(args.task)
+    if args.step_prompt and (task_key is None or not args.step_file):
+        raise SystemExit("--step-prompt 需要 --step-file，且任务是 weigh / task2 / task3")
+    log.info("模式 %s   任务：%s   变体：%s   步骤文本：%s", mode, prompt, args.variant or "-", "开" if args.step_prompt else "关")
 
     if mode == "live":
         print("\n⚠ live 模式会让从臂按模型输出运动。确认：手放实体急停、录制程序没在运行、网页没在 Move。")
@@ -389,8 +422,10 @@ def run(args):
     run_dir = Path(args.log_dir) / time.strftime("%Y%m%d_%H%M%S") / mode
     run_dir.mkdir(parents=True, exist_ok=True)
     io = NeroIO(args, read_only=(mode != "live"))
-    records = []
+    records, feedback, stats = [], [], {}
     executed, end_reason, t_start, timeouts = 0, "", time.time(), 0
+    if args.save_images:
+        (run_dir / "images").mkdir(exist_ok=True)
     if mode == "live":
         print(f"RUN_DIR={run_dir}", flush=True)
     try:
@@ -417,14 +452,20 @@ def run(args):
                 end_reason = "手臂停下后 2 s 内没收到新画面，停止"
                 log.error(end_reason)
                 break
-            state, head, wrist, sync_ms, age_h, age_w = io.observe()
+            state, head, wrist, sync_ms, age_h, age_w = io.observe(after=t_stop + args.fresh_after_stop_s)
+            step = read_step(args.step_file)
+            if args.step_prompt and step == 0:
+                log.warning("读不到当前步骤（%s），按第 1 步发送", args.step_file)
+            prompt_k = step_prompt(prompt, task_key, max(step, 1)) if args.step_prompt else prompt
             if max(age_h, age_w) > args.max_image_age_ms:
                 log.error("画面过期：头部 %.0f ms、腕部 %.0f ms 没有新画面，停止", age_h, age_w)
                 break
             if sync_ms > 20.0:
                 log.warning("两相机时间戳差 %.1f ms（手臂静止时不影响）", sync_ms)
             build = build_piper_compat_request if args.piper_compat else build_request
-            req = build(state, head, wrist, prompt, args)
+            req = build(state, head, wrist, prompt_k, args)
+            if args.save_images:
+                save_images(run_dir / "images", chunk, head, wrist)
 
             t0 = time.monotonic()
             try:
@@ -455,9 +496,13 @@ def run(args):
                 a[:, :6], a[:, 6], a[:, 7] = actions[:, :6], state[6], actions[:, 6] * GRIPPER_MAX_M
                 actions = a
             problems = check_chunk(actions, state, args)
-            log.info("第 %d 块  推理 %.2f s  %s", chunk, latency, describe_chunk(actions, state))
+            log.info("第 %d 块  步骤 %s  推理 %.2f s  %s", chunk, step, latency, describe_chunk(actions, state))
             records.append(dict(chunk=chunk, t=time.time(), latency=latency, sync_ms=sync_ms,
-                                state=state, actions=actions, problems=problems))
+                                state=state, actions=actions, problems=problems, step=step,
+                                age_h=age_h, age_w=age_w, prompt_used=resp.get("prompt_used") or prompt_k))
+            write_status(run_dir, records[-1], stats, args)
+            if mode == "dry" or chunk == 0:
+                log.info("  指令：%s", records[-1]["prompt_used"])
 
             if mode == "dry":
                 for p in problems:
@@ -471,7 +516,7 @@ def run(args):
                 break
             log.info("执行前 %d 步（放慢 %.1f 倍，约 %.1f s）", min(args.exec_steps, len(actions)), args.slow,
                      min(args.exec_steps, len(actions)) / args.action_hz * args.slow)
-            reason = execute_chunk(io, actions, state, args)
+            reason = execute_chunk(io, actions, state, args, fb=feedback, chunk=chunk, stats=stats)
             t_stop = time.monotonic()
             executed += 1
             if reason != "ok":
@@ -494,8 +539,11 @@ def run(args):
             (run_dir / "summary.json").write_text(json.dumps(
                 dict(args=vars(args), prompt=prompt, mode=mode, started=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t_start)),
                      duration_s=round(time.time() - t_start, 1), executed_chunks=executed, end_reason=end_reason,
-                     chunks=[dict(chunk=r["chunk"], latency=round(r["latency"], 3),
-                                  sync_ms=round(r["sync_ms"], 1), problems=r["problems"]) for r in records]),
+                     variant=args.variant, step_prompt=args.step_prompt, gripper_clipped_ticks=stats.get("grip_clip", 0),
+                     feedback_error=stats.get("fb_err"),
+                     chunks=[dict(chunk=r["chunk"], latency=round(r["latency"], 3), step=r["step"],
+                                  sync_ms=round(r["sync_ms"], 1), age_ms=[round(r["age_h"]), round(r["age_w"])],
+                                  prompt_used=r["prompt_used"], problems=r["problems"]) for r in records]),
                 ensure_ascii=False, indent=1))
         if records:
             np.savez_compressed(
@@ -506,8 +554,48 @@ def run(args):
                 latency=np.array([r["latency"] for r in records]),
                 sync_ms=np.array([r["sync_ms"] for r in records]),
                 t=np.array([r["t"] for r in records]),
+                step=np.array([r["step"] for r in records]),
             )
+        if feedback:
+            # 每行：time, chunk, 步序号 k, 下发目标 j1..j7 + 夹爪(裁剪后), 实测 j1..j7 + 夹爪
+            np.savez_compressed(run_dir / "feedback.npz", rows=np.array(feedback, dtype=np.float64),
+                                columns=np.array(["t", "chunk", "k"] + [f"target_j{i}" for i in range(1, 8)] + ["target_grip"]
+                                                 + [f"meas_j{i}" for i in range(1, 8)] + ["meas_grip"]))
             log.info("记录已存 %s", run_dir)
+
+
+def read_step(path) -> int:
+    """测试台写的当前步骤（1~4）；没给文件就是 0。读不到时保持 0，不中断运行。"""
+    if not path:
+        return 0
+    try:
+        s = int(Path(path).expanduser().read_text().strip() or 0)
+        return s if 1 <= s <= 4 else 0
+    except Exception:
+        return 0
+
+
+def save_images(folder: Path, chunk: int, head: np.ndarray, wrist: np.ndarray):
+    try:
+        from PIL import Image
+        Image.fromarray(head).save(folder / f"{chunk:03d}_front.jpg", quality=90)
+        Image.fromarray(wrist).save(folder / f"{chunk:03d}_wrist.jpg", quality=90)
+    except Exception as e:   # 存图失败不影响运行
+        log.warning("存图失败：%s", e)
+
+
+def write_status(run_dir: Path, r: dict, stats: dict, args):
+    """给测试台看的最新一块（每块覆盖写）。"""
+    a, s = r["actions"], r["state"]
+    try:
+        (run_dir / "live_status.json").write_text(json.dumps(dict(
+            t=r["t"], chunk=r["chunk"], step=r["step"], variant=args.variant, prompt_used=r["prompt_used"],
+            latency=round(r["latency"], 3), sync_ms=round(r["sync_ms"], 1), age_ms=[round(r["age_h"]), round(r["age_w"])],
+            move_deg=round(float(np.degrees(np.abs(a[min(args.exec_steps, len(a)) - 1, :7] - s[:7]).max())), 2),
+            grip_now_mm=round(float(s[7]) * 1000, 1), grip_pred_mm=[round(float(a[:, 7].min()) * 1000, 1), round(float(a[:, 7].max()) * 1000, 1)],
+            grip_clipped_ticks=stats.get("grip_clip", 0), problems=r["problems"]), ensure_ascii=False))
+    except Exception as e:
+        log.warning("写 live_status 失败：%s", e)
 
 
 def wait_fresh(io: "NeroIO", after: float, timeout_s: float = 2.0) -> bool:
@@ -602,6 +690,12 @@ def argument_parser():
     p.add_argument("--piper-compat", action="store_true",
                    help="仅 dry：按当前双臂 Piper 服务的格式发请求，只测连通和耗时")
     p.add_argument("--log-dir", default="/data/panhe/vla_runs")
+    p.add_argument("--step-file", default="", help="测试台写当前步骤的文件（如 ~/.nero_vla_step）")
+    p.add_argument("--step-prompt", action="store_true", help="把 Step k/4 文本接到指令后（只给带步骤训练的模型用）")
+    p.add_argument("--variant", default="", help="实验变体标签，记进 summary（E0 / E1 / M1 / M2 ...）")
+    p.add_argument("--save-images", type=int, default=1, help="1 = 每次推理存头部/腕部图像")
+    p.add_argument("--feedback-every", type=int, default=3,
+                   help="执行时每 N 个控制周期读一次从臂实际位置（30 Hz 下 3 = 10 Hz；0 = 不记）")
     return p
 
 

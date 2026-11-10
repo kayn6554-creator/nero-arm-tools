@@ -49,12 +49,17 @@ def item_line():
     return f"{IL}：{ITEM['cur']} · {ITEM['name']}"
 def show_rec():
     if FAIL:
-        banner("r", f"● 录制中 · 失败数据 · 第 {UI['ep'] + 1} 条", [item_line(), f"step：{step_line()}",
+        banner("r", f"● 录制中 · 失败数据 · 第 {UI['ep'] + 1} 条", [item_line(), scene_line(), f"step：{step_line()}",
                "按 1–4 切换 step；到哪一步失败，就停在那一步按 f（停在 step k = F k）",
                "  " + "  ".join(fail_name(k) for k in NR.STEP_NAMES), "结束：f 失败      录错了：← 丢弃，回到准备"])
         return
-    banner("g", f"● 录制中 · 第 {UI['ep'] + 1} 条", [item_line(), f"step：{step_line()}",
+    banner("g", f"● 录制中 · 第 {UI['ep'] + 1} 条", [item_line(), scene_line(), f"step：{step_line()}",
            "按 1–4 切换 step（按错直接按对的）", "完成：s 成功 / f 失败      录错了：← 丢弃，回到准备"])
+
+def show_armed():
+    banner("b", f"◎ 就绪 · 第 {UI['ep'] + 1} 条 · 动主臂就开始录（现在不录）", [item_line(), scene_line(),
+           f"主臂任一关节动超过 {ARM['deg']:g}° 自动开始录制，开头不会再有静止段",
+           C["d"] + "→：不等动作，立刻开始录      Esc：结束（这一条不存）" + C["0"]])
 
 def show_reset():
     n = UI["ep"] + 1; lab = {"success": "成功", "failure": "失败"}.get(UI["label"], "未标注")
@@ -88,6 +93,31 @@ def _read_item(ds_root):
         ITEM["cur"] = int(lab.get("current") or 0); ITEM["name"] = NR.item_name(lab, ITEM["cur"]); ITEM["lab"] = lab
     except Exception as e:
         ITEM["cur"] = 0; ITEM["name"] = f"读不到标签：{e}"
+# ---- 场景（11-09 加）：网页上选“当前场景 + 摆法”，写在 _labels/_scene_current.json；
+#      每条开录时读一次，保存时把 {条: 场景} 写进 _labels/<数据集>.scenes.json。不改数据集字段 ----
+SCENE = {"cur": None}
+SCENE_DIR = Path(os.environ.get("NERO_DATA_ROOT", "/data/panhe/lerobot_data")) / "_labels"
+def _read_scene(ds_root):
+    try:
+        d = json.loads((SCENE_DIR / "_scene_current.json").read_text(encoding="utf-8")).get(Path(ds_root).name)
+        SCENE["cur"] = d if isinstance(d, dict) and d.get("scene") else None
+    except Exception:
+        SCENE["cur"] = None
+def scene_line():
+    s = SCENE["cur"]
+    return f"场景：{s['scene']} · 摆法 {s.get('rot', 0) + 1}" + (f" · {s['desc']}" if s.get("desc") else "") if s else "场景：未选（网页上选“当前场景”）"
+def _save_scene(ds_root, ep):
+    s = SCENE["cur"]
+    if not s: return
+    p = SCENE_DIR / f"{Path(ds_root).name}.scenes.json"
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        d = {}
+    d.setdefault("episodes", {})[str(int(ep))] = {k: s.get(k) for k in ("scene", "rot", "desc")}
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp"); tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8"); tmp.replace(p)
+
 LIVE = Path(os.environ.get("NERO_DATA_ROOT", "/data/panhe/lerobot_data")) / "_live.json"
 if os.environ.get("NERO_DATASET"):
     try:
@@ -117,6 +147,7 @@ def _key(self, key):
         ev["exit_early"] = True; return
     if k == "LEFT":
         if mode == "prep": return _hint("准备阶段没有可丢弃的，直接按 → 开始")
+        if mode == "armed": return _hint("还没开始录，没有可丢弃的；动主臂就开始，或按 Esc 结束")
         ev["rerecord_episode"] = True; ev["exit_early"] = True; return
     if k == "ESC":
         if mode == "rec": ev["rerecord_episode"] = True      # 录制中按 Esc：这一条不保存
@@ -152,8 +183,15 @@ def _record_loop(*a, **kw):
         if ev["stop_recording"]:
             ev["rerecord_episode"] = True; return       # 准备阶段按 Esc：这一条什么都不存
         ev["exit_early"] = False; UI["need_prep"] = False
-    _read_item(ds.root)
+    _read_item(ds.root); _read_scene(ds.root)
     ev["exit_early"] = False                      # 防止保存期间多按的 → 让这一条一开始就结束
+    if ARM["on"]:                                 # 11-09：先“就绪”（不录），主臂动了才开始录，去掉开头的静止段
+        UI["mode"] = "armed"; show_armed()
+        _wait_motion(a, kw)
+        if ev["stop_recording"]:
+            ev["rerecord_episode"] = True; return    # 就绪阶段按 Esc：这一条什么都不存
+        ev["exit_early"] = False
+        _read_item(ds.root); _read_scene(ds.root)    # 就绪期间网页上可能改了物品 / 场景
     UI["mode"] = "rec"; UI["label"] = None; STEP["cur"] = 1; show_rec()
     if ds.fps != kw["fps"]: kw["dataset"] = _FpsProxy(ds, kw["fps"])
     try:
@@ -162,6 +200,32 @@ def _record_loop(*a, **kw):
         UI["mode"] = "reset"
         if ev["rerecord_episode"]: UI["discard"] = True
 rec.record_loop = _record_loop
+
+# ---- 动了才开录：就绪阶段照常跑遥操作循环（不存数据），后台线程看主臂关节，动了就结束这段循环 ----
+ARM = {"on": os.environ.get("NERO_ARM_START", "1") == "1", "deg": float(os.environ.get("NERO_ARM_DEG", "0.5"))}
+def _leader_joints():
+    act = DEV.get("act")
+    if not isinstance(act, dict): return None
+    try:
+        v = [float(np.ravel(x)[0]) for k, x in sorted(act.items()) if k.endswith(".pos") and "gripper" not in k]
+    except Exception:
+        return None
+    return np.array(v) if v else None
+def _wait_motion(a, kw):
+    ev, stop, base = kw["events"], threading.Event(), {"v": None}
+    def watch():
+        while not stop.wait(0.02):
+            v = _leader_joints()
+            if v is None: continue
+            if base["v"] is None or len(base["v"]) != len(v): base["v"] = v; continue
+            if np.degrees(np.abs(v - base["v"]).max()) > ARM["deg"]:
+                print(f"{C['g']}  主臂动了 → 开始录制 {C['0']}", flush=True)
+                ev["exit_early"] = True; return
+    th = threading.Thread(target=watch, daemon=True); th.start()
+    try:
+        _orig_rl(*a, **{**kw, "dataset": None, "control_time_s": 36000})
+    finally:
+        stop.set(); th.join(1)
 
 # ---- 订阅定位模式状态（独立 ROS 上下文）----
 POS = {"on": False}; _ros = {}
@@ -204,7 +268,7 @@ from lerobot_teleoperator_nero import NeroLeader
 from lerobot_robot_nero import NeroFollower
 _orig_get = NeroLeader.get_action
 def _get_with_grip(self):
-    DEV["leader"] = self; act = _orig_get(self)
+    DEV["leader"] = self; act = _orig_get(self); DEV["act"] = act
     try:
         g = self._gripper.get_gripper_ctrl_states() if self._gripper is not None else None
         if g is not None: DEV["grip"] = float(g.msg.value)
@@ -303,7 +367,13 @@ def _save_inner(self, *a, **kw):
             DEPTH["msg"] = "深度 " + " / ".join(f"{c} {v['frames']} 帧{'' if v['ok'] else ' ✗ ' + str(v['error'] or '帧数不符')}" for c, v in r.items())
     except Exception as e:
         print(f"[深度] 保存失败：{e}", flush=True)
+    b = self.episode_buffer
+    ep_idx = int(np.ravel(b["episode_index"])[0]) if b and b.get("size", 0) > 0 else None
     res = _orig_save(self, *a, **kw)
+    try:
+        if ep_idx is not None: _save_scene(self.root, ep_idx)
+    except Exception as e:
+        print(f"[场景] 记录失败（不影响录制）：{e}", flush=True)
     try:
         s = NR.build_site(self.root)
         print(f"{C['g']}  ✓ 已保存第 {s['episodes']} 条 {C['0']}  {IL} {ITEM['name'] or '未选'} · {DEPTH.pop('msg', '')} · 共 {s['episodes']} 条 · {s['check']} · 报告已更新", flush=True)
@@ -320,7 +390,7 @@ def _live_loop():
             d = dict(dataset=os.environ["NERO_DATASET"], started=started, mode=UI["mode"], ep=UI["ep"] + 1, label=UI["label"],
                      step=STEP["cur"], step_name=NR.STEP_NAMES.get(STEP["cur"], ""), steps=NR.STEP_NAMES, item=ITEM["cur"],
                      item_name=ITEM.get("name", ""), item_label=IL, positioning=POS["on"], t=time.time(),
-                     fail=bool(FAIL), fail_types=(FAIL or {}).get("types"))
+                     fail=bool(FAIL), fail_types=(FAIL or {}).get("types"), scene=SCENE["cur"], arm_start=ARM["on"])
             if LIVE_STOP.is_set(): break
             tmp = LIVE.with_suffix(".tmp"); tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8"); tmp.replace(LIVE)
         except Exception:
