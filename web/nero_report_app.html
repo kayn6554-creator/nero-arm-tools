@@ -665,7 +665,7 @@ function relabel(root) {
 }
 
 /* ---------- 采集控制：按钮 → 服务器 → tmux 送进录制终端；定位开关 ---------- */
-const MODE = { prep: "准备（不录）", start: "启动中", rec: "录制中", reset: "复位（不录）", busy: "保存中" };
+const MODE = { prep: "准备（不录）", armed: "就绪 · 动主臂就开始录", start: "启动中", rec: "录制中", reset: "复位（不录）", busy: "保存中" };
 let CTL = { st: null, msg: "", err: false, busy: false, open: true };
 try { CTL.open = localStorage.getItem("nero-ctl-term") !== "0"; } catch (e) {}
 async function ctlPoll() {
@@ -689,7 +689,7 @@ function ctlRender() {
   const st = CTL.st; box.hidden = false;
   if (!st) { box.innerHTML = `<div class="box"><h2>采集控制</h2><div class="msg err">连不上控制接口（报告服务要用 10-29 的新版本，并且在 tmux 里运行）</div></div>`; return; }
   const lv = st.live && st.live.fresh ? st.live : null, mode = st.running ? (lv ? lv.mode : "start") : null;
-  const on = (k) => ({ prep: ["next", "esc"], start: ["esc"], rec: ["1", "2", "3", "4", "5", "6", "s", "f", "discard", "esc"], reset: ["next", "discard", "esc"], busy: [] }[mode] || []).includes(k) && !CTL.busy;
+  const on = (k) => ({ prep: ["next", "esc"], armed: ["next", "esc"], start: ["esc"], rec: ["1", "2", "3", "4", "5", "6", "s", "f", "discard", "esc"], reset: ["next", "discard", "esc"], busy: [] }[mode] || []).includes(k) && !CTL.busy;
   const steps = (lv && lv.steps) || {}, il = (lv && lv.item_label) || "物品";
   const presets = Object.entries(TASKS).filter(([k, t]) => t.task);
   const b = (k, label, cls = "", title = "") => `<button class="btn kb ${cls}" data-k="${k}" ${on(k) ? "" : "disabled"} title="${esc(title)}">${label}</button>`;

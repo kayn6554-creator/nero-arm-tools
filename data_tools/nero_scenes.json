@@ -1,0 +1,30 @@
+{
+ "_说明": "场景表（11-09）。放到采集机 ~/nero_scenes.json。tools 是会轮换角标的工具；fixed 是固定位置的目标（风扇、容器、土壤盆、秤、物体），放在原来的位置。每 rotate_every 条换一次摆法：摆法 r 时，tools 里第 i 个放在 slots[(i + r) % 4]。target 是这个场景计划采的条数（成功且没问题的）；pair 是同一个桌面上还可以顺带采的其他任务，只做提示。",
+ "slots": ["P1", "P2", "P3", "P4"],
+ "rotate_every": 5,
+ "tasks": {
+  "noise": {"total": 80, "scenes": [
+   {"id": "N1", "name": "只有噪声计", "tools": ["噪声计"], "fixed": ["风扇"], "target": 25},
+   {"id": "N2", "name": "噪声计 + 风速计", "tools": ["噪声计", "风速计"], "fixed": ["风扇"], "target": 30, "pair": ["task3"]},
+   {"id": "N3", "name": "噪声计 + 风速计 + 红外测温仪", "tools": ["噪声计", "风速计", "红外测温仪"], "fixed": ["风扇"], "target": 25, "pair": ["task3"]}
+  ]},
+  "soil": {"total": 80, "scenes": [
+   {"id": "S1", "name": "只有土壤探针", "tools": ["土壤探针"], "fixed": ["土壤盆"], "target": 25},
+   {"id": "S2", "name": "土壤探针 + 温度计", "tools": ["土壤探针", "温度计"], "fixed": ["土壤盆", "水容器"], "target": 30, "pair": ["task2"]},
+   {"id": "S3", "name": "土壤探针 + 温度计 + 红外测温仪", "tools": ["土壤探针", "温度计", "红外测温仪"], "fixed": ["土壤盆", "水容器"], "target": 25, "pair": ["task2", "irwater"]}
+  ]},
+  "irwater": {"total": 60, "scenes": [
+   {"id": "W1", "name": "只有红外测温仪", "tools": ["红外测温仪"], "fixed": ["水容器"], "target": 15},
+   {"id": "W2", "name": "红外测温仪 + 温度计", "tools": ["红外测温仪", "温度计"], "fixed": ["水容器"], "target": 25, "pair": ["task2"]},
+   {"id": "W3", "name": "红外测温仪 + 温度计 + 土壤探针", "tools": ["红外测温仪", "温度计", "土壤探针"], "fixed": ["水容器", "土壤盆"], "target": 20, "pair": ["task2", "soil"]}
+  ]},
+  "irobj": {"total": 60, "scenes": [
+   {"id": "O1", "name": "只有红外测温仪", "tools": ["红外测温仪"], "fixed": ["目标物体"], "target": 15},
+   {"id": "O2", "name": "红外测温仪 + 秤", "tools": ["红外测温仪"], "fixed": ["目标物体", "电子秤"], "target": 25, "pair": ["weigh"]},
+   {"id": "O3", "name": "红外测温仪 + 温度计", "tools": ["红外测温仪", "温度计"], "fixed": ["目标物体", "水容器"], "target": 20, "pair": ["irwater", "task2"]}
+  ]},
+  "weigh": {"total": 0, "scenes": [{"id": "T0", "name": "原始单任务场景", "tools": [], "fixed": ["电子秤", "物体"], "target": 0}]},
+  "task2": {"total": 0, "scenes": [{"id": "T0", "name": "原始单任务场景", "tools": ["温度计"], "fixed": ["水容器"], "target": 0}]},
+  "task3": {"total": 0, "scenes": [{"id": "T0", "name": "原始单任务场景", "tools": ["风速计"], "fixed": ["风扇"], "target": 0}]}
+ }
+}

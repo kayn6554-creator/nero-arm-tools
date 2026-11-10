@@ -17,7 +17,7 @@ CTL_LOCK = threading.Lock()      # 控制按钮单独一把锁，定位开关要
 TMUX = os.environ.get("NERO_TMUX", "nero:0.0")
 HOME = Path.home()
 KEYS = {"next": "Right", "discard": "Left", "esc": "Escape", "s": "s", "f": "f", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6"}
-ALLOWED = {"prep": {"next", "esc"}, "start": {"esc"}, "rec": {"1", "2", "3", "4", "5", "6", "s", "f", "discard", "esc"},
+ALLOWED = {"prep": {"next", "esc"}, "armed": {"next", "esc"}, "start": {"esc"}, "rec": {"1", "2", "3", "4", "5", "6", "s", "f", "discard", "esc"},
            "reset": {"next", "discard", "esc"}, "busy": set()}
 
 
@@ -162,6 +162,7 @@ def ctl(req):
     if a in ("pos_on", "pos_off"):
         if not running: raise ValueError("录制程序没在运行：定位模式由录制程序里的从臂插件提供")
         if a == "pos_on" and mode == "rec": raise ValueError("录制中不能开定位（会把这一条的阶段打乱）；先 s 结束或 ← 丢弃")
+        if a == "pos_on" and mode == "armed": raise ValueError("就绪阶段不能开定位：定位会带动主臂，马上触发开录。先在复位阶段定位好，再按 →")
         if a == "pos_off":
             try:
                 st = json.loads(urllib.request.urlopen("http://127.0.0.1:8765/api/state", timeout=1).read())
@@ -177,7 +178,7 @@ def ctl(req):
     if a in KEYS:
         if not running: raise ValueError("录制程序没在运行")
         if mode is None: raise ValueError("读不到录制程序的状态（_live.json 没更新），请在终端里按键")
-        if a not in ALLOWED.get(mode, set()): raise ValueError(f"现在是“{ {'prep': '准备', 'rec': '录制中', 'reset': '复位', 'busy': '保存中', 'start': '启动中'}.get(mode, mode) }”阶段，这个键无效")
+        if a not in ALLOWED.get(mode, set()): raise ValueError(f"现在是“{ {'prep': '准备', 'armed': '就绪（动主臂就开始录）', 'rec': '录制中', 'reset': '复位', 'busy': '保存中', 'start': '启动中'}.get(mode, mode) }”阶段，这个键无效")
         if a in "123456" and str(a) not in {str(k) for k in (live.get("steps") or {})}: raise ValueError(f"这个任务没有 step {a}")
         if a == "s" and live.get("fail"): raise ValueError("失败数据集只用 f 结束：停在失败的那一步按 f")
         _tmux("send-keys", "-t", TMUX, KEYS[a]); return f"已发送 {KEYS[a]}"
